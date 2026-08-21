@@ -1,0 +1,17 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary outputs
+tmp/*
+!tmp/.gitkeep
+
+# Backups
+backup/
+*.bak
+
+# Environment / IDE
+.vscode/
+.idea/
+*.swp
