@@ -1,25 +1,23 @@
-# **** DEPENDENCIES
+"""
+WaterMarker - PyQt6 Implementation
+A modern desktop application to apply text watermarks to images.
+"""
 
 import sys
 import os
 import shutil
 import configparser
-import tkinter as tk
-from tkinter import messagebox, font, filedialog, colorchooser, ttk
+from PIL import Image, ImageFont, ImageDraw
+import matplotlib.font_manager as fm
 
-try:
-    from PIL import Image, ImageTk, ImageFont, ImageDraw
-    import matplotlib.font_manager as fm
-except ImportError as e:
-    root = tk.Tk()
-    root.withdraw()
-    messagebox.showerror(
-        "Dependency Error",
-        f"A required library is missing: {e}.\n\n"
-        "Please install the required libraries using:\n"
-        "pip install Pillow matplotlib configparser"
-    )
-    sys.exit(1)
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QLabel, QLineEdit,
+    QListWidget, QSlider, QPushButton, QToolButton,
+    QHBoxLayout, QVBoxLayout, QGridLayout, QFrame, QFileDialog,
+    QColorDialog, QMessageBox, QDialog
+)
+from PyQt6.QtGui import QIcon, QPixmap, QImage, QFont, QAction, QColor, QCursor
+from PyQt6.QtCore import Qt, QSize
 
 # **** PATHS & CONSTANTS
 
@@ -33,666 +31,618 @@ PROGRAM_NAME = 'WaterMarker'
 PROGRAM_VERSION = '1.0.0'
 PROGRAM_DESCRIPTION = 'Set a text watermark\nthe easy way\n\nProgram by @edfasano70'
 
-# **** VARIABLES
 
-root_dir = BASE_DIR
-save_dir = BASE_DIR
-save_flag = False
-text_color = (0, 0, 0)
-font_selected = None
-display_image_path = os.path.join(RESOURCES_DIR, 'checkers.png')
-image1_width = 0
-image1_height = 0
-updating_controls = False
+class AboutDialog(QDialog):
+    """Modal dialog displaying application information."""
 
-# **** FUNCTIONS
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("About")
+        self.setFixedSize(300, 320)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
-def show_about():
-    about_window = tk.Toplevel(win)
-    about_window.title("About")
-    about_window.geometry("300x320")
-    about_window.iconphoto(False, icon)
-    about_window.resizable(False, False)
-    about_window.attributes("-topmost", True)
+        logo_path = os.path.join(RESOURCES_DIR, 'logo.png')
+        if os.path.exists(logo_path):
+            self.setWindowIcon(QIcon(logo_path))
 
-    # Add splash image with reference retention
-    splash_path = os.path.join(RESOURCES_DIR, 'splash.png')
-    if os.path.exists(splash_path):
-        about_image = ImageTk.PhotoImage(Image.open(splash_path))
-        image_label = tk.Label(about_window, image=about_image)
-        image_label.image = about_image  # Retain reference to prevent GC
-        image_label.pack(pady=(10, 5))
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setContentsMargins(15, 15, 15, 15)
 
-    # Texts below the image
-    name_label = tk.Label(about_window, text=PROGRAM_NAME, font=font.Font(family='Arial', size=15, weight='bold'))
-    name_label.pack()
+        # Splash image
+        splash_path = os.path.join(RESOURCES_DIR, 'splash.png')
+        if os.path.exists(splash_path):
+            splash_label = QLabel()
+            pixmap = QPixmap(splash_path)
+            splash_label.setPixmap(pixmap.scaled(120, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            splash_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(splash_label)
 
-    version_label = tk.Label(about_window, text=f"v{PROGRAM_VERSION}", font=font.Font(family='Arial', size=10, weight='bold'))
-    version_label.pack()
+        # Program Name
+        name_label = QLabel(PROGRAM_NAME)
+        name_font = QFont("Arial", 14, QFont.Weight.Bold)
+        name_label.setFont(name_font)
+        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(name_label)
 
-    description_label = tk.Label(about_window, text=PROGRAM_DESCRIPTION, font=font.Font(family='Arial', size=9, weight='normal'))
-    description_label.pack(pady=5)
+        # Version
+        version_label = QLabel(f"v{PROGRAM_VERSION}")
+        version_font = QFont("Arial", 10, QFont.Weight.Bold)
+        version_label.setFont(version_font)
+        version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(version_label)
 
-    # Exit button
-    exit_button = tk.Button(about_window, text="Close", command=about_window.destroy, width=10)
-    exit_button.pack(side=tk.BOTTOM, pady=10)
+        # Description
+        desc_label = QLabel(PROGRAM_DESCRIPTION)
+        desc_font = QFont("Arial", 9)
+        desc_label.setFont(desc_font)
+        desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(desc_label)
 
-    # Make the "About" window modal
-    about_window.transient(win)
-    about_window.grab_set()
-    about_window.focus()
-    win.wait_window(about_window)
+        layout.addSpacing(10)
 
-def show_help():
-    help_window = tk.Toplevel(win)
-    help_window.title("Help - WaterMarker")
-    help_window.geometry("390x340")
-    help_window.iconphoto(False, icon)
-    help_window.resizable(False, False)
-    help_window.attributes("-topmost", True)
+        # Close button
+        close_btn = QPushButton("Close")
+        close_btn.setFixedWidth(90)
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
-    help_frame = tk.Frame(help_window, padx=16, pady=16)
-    help_frame.pack(fill="both", expand=True)
 
-    title_label = tk.Label(
-        help_frame,
-        text="How to use WaterMarker",
-        font=font.Font(family='Arial', size=12, weight='bold')
-    )
-    title_label.pack(anchor="w", pady=(0, 10))
+class HelpDialog(QDialog):
+    """Modal dialog displaying application help and instructions."""
 
-    instructions = (
-        "1. Open an image using File -> Open.\n"
-        "2. Enter your watermark text in the Text field.\n"
-        "3. Choose a font from the Font list.\n"
-        "4. Adjust Size, Transparency, and Angle using the sliders or +/- buttons.\n"
-        "5. Click on the Color box to choose a text color.\n"
-        "6. Save your watermarked image using File -> Save.\n\n"
-        "Preferences and recent folders are automatically saved on exit."
-    )
-    text_label = tk.Label(
-        help_frame,
-        text=instructions,
-        justify="left",
-        wraplength=350,
-        font=font.Font(family='Arial', size=9)
-    )
-    text_label.pack(anchor="w", fill="both", expand=True)
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Help - WaterMarker")
+        self.setFixedSize(390, 340)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
-    close_btn = tk.Button(help_frame, text="Close", command=help_window.destroy, width=10)
-    close_btn.pack(side=tk.BOTTOM, pady=(10, 0))
+        logo_path = os.path.join(RESOURCES_DIR, 'logo.png')
+        if os.path.exists(logo_path):
+            self.setWindowIcon(QIcon(logo_path))
 
-    help_window.transient(win)
-    help_window.grab_set()
-    help_window.focus()
-    win.wait_window(help_window)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
 
-def center_window():
-    global win, controls_frame, image1_width, image1_height
-    win.update_idletasks()
-    screen_width = win.winfo_screenwidth()
-    screen_height = win.winfo_screenheight()
-    window_width = controls_frame.winfo_reqwidth() + 15 + image1_width
-    window_height = max(320, image1_height + 20)
-    x_coordinate = int((screen_width / 2) - (window_width / 2))
-    y_coordinate = int((screen_height / 2) - (window_height / 2))
-    win.geometry(f"{window_width}x{window_height}+{x_coordinate}+{y_coordinate}")
+        title_label = QLabel("How to use WaterMarker")
+        title_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        layout.addWidget(title_label)
 
-def on_font_size_scale(val):
-    global updating_controls
-    if updating_controls:
-        return
-    int_val = int(round(float(val)))
-    if font_size_variable.get() != str(int_val):
-        font_size_variable.set(str(int_val))
-        refresh()
+        instructions = (
+            "1. Open an image using <b>File &rarr; Open</b>.<br>"
+            "2. Enter your watermark text in the <b>Text</b> field.<br>"
+            "3. Choose a font from the <b>Font</b> list.<br>"
+            "4. Adjust <b>Size</b>, <b>Transparency</b>, and <b>Angle</b> using the sliders or +/- buttons.<br>"
+            "5. Click on the <b>Color</b> box to choose a text color.<br>"
+            "6. Save your watermarked image using <b>File &rarr; Save</b>.<br><br>"
+            "<i>Preferences and recent folders are automatically saved on exit.</i>"
+        )
+        text_label = QLabel(instructions)
+        text_label.setFont(QFont("Arial", 9))
+        text_label.setWordWrap(True)
+        layout.addWidget(text_label)
 
-def on_transparency_scale(val):
-    global updating_controls
-    if updating_controls:
-        return
-    int_val = int(round(float(val)))
-    if transparency_variable.get() != str(int_val):
-        transparency_variable.set(str(int_val))
-        refresh()
+        layout.addStretch()
 
-def on_angle_scale(val):
-    global updating_controls
-    if updating_controls:
-        return
-    int_val = int(round(float(val)))
-    if angle_variable.get() != str(int_val):
-        angle_variable.set(str(int_val))
-        refresh()
+        close_btn = QPushButton("Close")
+        close_btn.setFixedWidth(90)
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
-def icon_plus_command(dummy=None):
-    global updating_controls
-    value = int(font_size_variable.get()) + 2
-    if value > 150:
-        value = 150
-    font_size_variable.set(str(value))
-    updating_controls = True
-    font_size_scale.set(value)
-    updating_controls = False
-    refresh()
 
-def icon_minus_command(dummy=None):
-    global updating_controls
-    value = int(font_size_variable.get()) - 2
-    if value < 2:
-        value = 2
-    font_size_variable.set(str(value))
-    updating_controls = True
-    font_size_scale.set(value)
-    updating_controls = False
-    refresh()
+class WatermarkerApp(QMainWindow):
+    """Main application window using PyQt6."""
 
-def transparency_icon_plus_command(dummy=None):
-    global updating_controls
-    value = int(transparency_variable.get()) + 5
-    if value > 255:
-        value = 255
-    transparency_variable.set(str(value))
-    updating_controls = True
-    transparency_scale.set(value)
-    updating_controls = False
-    refresh()
+    def __init__(self):
+        super().__init__()
+        self.root_dir = BASE_DIR
+        self.save_dir = BASE_DIR
+        self.display_image_path = os.path.join(RESOURCES_DIR, 'checkers.png')
+        self.text_color = (0, 0, 0)
+        self.color_hex = "#000000"
+        self.updating_controls = False
 
-def transparency_icon_minus_command(dummy=None):
-    global updating_controls
-    value = int(transparency_variable.get()) - 5
-    if value < 0:
-        value = 0
-    transparency_variable.set(str(value))
-    updating_controls = True
-    transparency_scale.set(value)
-    updating_controls = False
-    refresh()
+        self.init_fonts()
+        self.init_ui()
+        self.load_preferences()
+        self.refresh()
+        self.center_window()
 
-def angle_icon_plus_command(dummy=None):
-    global updating_controls
-    value = int(angle_variable.get()) + 5
-    if value > 360:
-        value = 360
-    angle_variable.set(str(value))
-    updating_controls = True
-    angle_scale.set(value)
-    updating_controls = False
-    refresh()
+    def init_fonts(self):
+        """Discovers system TTF fonts."""
+        system_fonts = fm.findSystemFonts(fontpaths=None, fontext='ttf')
+        self.fonts = []
+        for font_path in system_fonts:
+            if '.ttf' in font_path.lower():
+                font_name = os.path.splitext(os.path.basename(font_path))[0].capitalize()
+                self.fonts.append((font_name, font_path))
 
-def angle_icon_minus_command(dummy=None):
-    global updating_controls
-    value = int(angle_variable.get()) - 5
-    if value < 0:
-        value = 0
-    angle_variable.set(str(value))
-    updating_controls = True
-    angle_scale.set(value)
-    updating_controls = False
-    refresh()
+        self.fonts.sort(key=lambda x: x[0])
+        if not self.fonts:
+            self.fonts.append(("Default", ""))
+        self.font_selected = self.fonts[0]
 
-def change_font(dummy=None):
-    global font_selected
-    selection = listbox_fonts.curselection()
-    if selection:
-        font_selected = fonts[selection[0]]
-    elif fonts:
-        font_selected = fonts[0]
-    refresh()
+    def init_ui(self):
+        """Builds the PyQt6 user interface."""
+        self.setWindowTitle(PROGRAM_NAME)
+        logo_path = os.path.join(RESOURCES_DIR, 'logo.png')
+        if os.path.exists(logo_path):
+            self.setWindowIcon(QIcon(logo_path))
 
-def watermark_text_variable_command(var, index, mode):
-    refresh()
+        # Menu Bar
+        menu_bar = self.menuBar()
 
-def open_image(dummy=None):
-    global root_dir, save_flag, display_image_path
-    options = {
-        'title': 'Select Image File',
-        'filetypes': [("Image Files", ('*.png', '*.jpg', '*.jpeg', '*.gif'))],
-        'initialdir': root_dir
-    }
+        # File Menu
+        file_menu = menu_bar.addMenu("File")
+        open_action = QAction("Open", self)
+        open_action.setShortcut("Ctrl+O")
+        open_action.triggered.connect(self.open_image)
+        file_menu.addAction(open_action)
 
-    filename = filedialog.askopenfilename(**options)
-    if filename:
-        display_image_path = filename
-        refresh()
-        center_window()
-        root_dir = os.path.dirname(filename)
-        save_flag = True
+        save_action = QAction("Save", self)
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self.save_image)
+        file_menu.addAction(save_action)
 
-def save_image(dummy=None):
-    global save_dir
-    file_path = filedialog.asksaveasfilename(
-        defaultextension=".png",
-        filetypes=[("PNG Image", "*.png"), ("All Files", "*.*")],
-        initialdir=save_dir
-    )
-    if file_path:
-        temp_out = os.path.join(TMP_DIR, 'out.png')
-        if os.path.exists(temp_out):
-            shutil.copy(temp_out, file_path)
-            save_dir = os.path.dirname(file_path)
-            messagebox.showinfo("Info", "Image saved successfully")
-        else:
-            messagebox.showerror("Error", "Watermarked image could not be found.")
+        file_menu.addSeparator()
 
-def refresh():
-    global image_photo, image_display_label, image1_width, image1_height
-    global watermark_text_variable, font_size_variable, display_image_path
-    global font_selected, text_color, transparency_variable, angle_variable
+        exit_action = QAction("Exit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
 
-    if not os.path.exists(display_image_path):
-        return
+        # Help Menu
+        help_menu = menu_bar.addMenu("Help")
+        help_action = QAction("Help", self)
+        help_action.setShortcut("F1")
+        help_action.triggered.connect(self.show_help)
+        help_menu.addAction(help_action)
 
-    win.config(cursor="watch")
-    win.update_idletasks()
+        about_action = QAction("About", self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
 
-    try:
-        base_image = Image.open(display_image_path).convert("RGBA")
-    except Exception as e:
-        win.config(cursor='')
-        messagebox.showerror("Error", f"Failed to open image:\n{e}")
-        return
+        # Central Widget & Main Layout
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QHBoxLayout(central_widget)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(15)
 
-    image1_width, image1_height = base_image.size
-    if image1_width > 600 or image1_height > 600:
-        base_image.thumbnail((600, 600))
-        image1_width, image1_height = base_image.size
+        # Controls Panel (Left)
+        controls_widget = QWidget()
+        controls_layout = QGridLayout(controls_widget)
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setVerticalSpacing(8)
+        controls_layout.setHorizontalSpacing(8)
 
-    text_layer = Image.new('RGBA', base_image.size, (255, 255, 255, 0))
+        # 1. Text Entry
+        text_lbl = QLabel("Text")
+        self.text_entry = QLineEdit("The Lazy Fox")
+        self.text_entry.textChanged.connect(self.on_text_changed)
+        controls_layout.addWidget(text_lbl, 0, 0, Qt.AlignmentFlag.AlignRight)
+        controls_layout.addWidget(self.text_entry, 0, 1)
 
-    # Font handling
-    font_size = int(font_size_variable.get())
-    if font_selected and font_selected[1] and os.path.exists(font_selected[1]):
+        # 2. Font List
+        font_lbl = QLabel("Font")
+        self.font_list = QListWidget()
+        self.font_list.setFixedHeight(110)
+        for font_name, _ in self.fonts:
+            self.font_list.addItem(font_name)
+        self.font_list.setCurrentRow(0)
+        self.font_list.currentRowChanged.connect(self.on_font_changed)
+        controls_layout.addWidget(font_lbl, 1, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+        controls_layout.addWidget(self.font_list, 1, 1)
+
+        # Icons
+        minus_icon_path = os.path.join(RESOURCES_DIR, 'icon_minus.png')
+        plus_icon_path = os.path.join(RESOURCES_DIR, 'icon_plus.png')
+        minus_icon = QIcon(minus_icon_path) if os.path.exists(minus_icon_path) else QIcon()
+        plus_icon = QIcon(plus_icon_path) if os.path.exists(plus_icon_path) else QIcon()
+
+        # 3. Size Control (Slider + Buttons)
+        size_lbl = QLabel("Size")
+        size_container = QWidget()
+        size_layout = QHBoxLayout(size_container)
+        size_layout.setContentsMargins(0, 0, 0, 0)
+        size_layout.setSpacing(4)
+
+        self.size_minus_btn = QToolButton()
+        self.size_minus_btn.setIcon(minus_icon)
+        self.size_minus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.size_minus_btn.clicked.connect(self.on_size_minus)
+        size_layout.addWidget(self.size_minus_btn)
+
+        self.size_slider = QSlider(Qt.Orientation.Horizontal)
+        self.size_slider.setRange(2, 150)
+        self.size_slider.setValue(24)
+        self.size_slider.setFixedWidth(100)
+        self.size_slider.valueChanged.connect(self.on_size_slider_changed)
+        size_layout.addWidget(self.size_slider)
+
+        self.size_plus_btn = QToolButton()
+        self.size_plus_btn.setIcon(plus_icon)
+        self.size_plus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.size_plus_btn.clicked.connect(self.on_size_plus)
+        size_layout.addWidget(self.size_plus_btn)
+
+        self.size_val_lbl = QLabel("24")
+        self.size_val_lbl.setFixedWidth(30)
+        size_layout.addWidget(self.size_val_lbl)
+
+        controls_layout.addWidget(size_lbl, 2, 0, Qt.AlignmentFlag.AlignRight)
+        controls_layout.addWidget(size_container, 2, 1, Qt.AlignmentFlag.AlignLeft)
+
+        # 4. Transparency Control (Slider + Buttons)
+        transp_lbl = QLabel("Transparency")
+        transp_container = QWidget()
+        transp_layout = QHBoxLayout(transp_container)
+        transp_layout.setContentsMargins(0, 0, 0, 0)
+        transp_layout.setSpacing(4)
+
+        self.transp_minus_btn = QToolButton()
+        self.transp_minus_btn.setIcon(minus_icon)
+        self.transp_minus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.transp_minus_btn.clicked.connect(self.on_transp_minus)
+        transp_layout.addWidget(self.transp_minus_btn)
+
+        self.transp_slider = QSlider(Qt.Orientation.Horizontal)
+        self.transp_slider.setRange(0, 255)
+        self.transp_slider.setValue(125)
+        self.transp_slider.setFixedWidth(100)
+        self.transp_slider.valueChanged.connect(self.on_transp_slider_changed)
+        transp_layout.addWidget(self.transp_slider)
+
+        self.transp_plus_btn = QToolButton()
+        self.transp_plus_btn.setIcon(plus_icon)
+        self.transp_plus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.transp_plus_btn.clicked.connect(self.on_transp_plus)
+        transp_layout.addWidget(self.transp_plus_btn)
+
+        self.transp_val_lbl = QLabel("125")
+        self.transp_val_lbl.setFixedWidth(30)
+        transp_layout.addWidget(self.transp_val_lbl)
+
+        controls_layout.addWidget(transp_lbl, 3, 0, Qt.AlignmentFlag.AlignRight)
+        controls_layout.addWidget(transp_container, 3, 1, Qt.AlignmentFlag.AlignLeft)
+
+        # 5. Angle Control (Slider + Buttons)
+        angle_lbl = QLabel("Angle")
+        angle_container = QWidget()
+        angle_layout = QHBoxLayout(angle_container)
+        angle_layout.setContentsMargins(0, 0, 0, 0)
+        angle_layout.setSpacing(4)
+
+        self.angle_minus_btn = QToolButton()
+        self.angle_minus_btn.setIcon(minus_icon)
+        self.angle_minus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.angle_minus_btn.clicked.connect(self.on_angle_minus)
+        angle_layout.addWidget(self.angle_minus_btn)
+
+        self.angle_slider = QSlider(Qt.Orientation.Horizontal)
+        self.angle_slider.setRange(0, 360)
+        self.angle_slider.setValue(45)
+        self.angle_slider.setFixedWidth(100)
+        self.angle_slider.valueChanged.connect(self.on_angle_slider_changed)
+        angle_layout.addWidget(self.angle_slider)
+
+        self.angle_plus_btn = QToolButton()
+        self.angle_plus_btn.setIcon(plus_icon)
+        self.angle_plus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.angle_plus_btn.clicked.connect(self.on_angle_plus)
+        angle_layout.addWidget(self.angle_plus_btn)
+
+        self.angle_val_lbl = QLabel("45")
+        self.angle_val_lbl.setFixedWidth(30)
+        angle_layout.addWidget(self.angle_val_lbl)
+
+        controls_layout.addWidget(angle_lbl, 4, 0, Qt.AlignmentFlag.AlignRight)
+        controls_layout.addWidget(angle_container, 4, 1, Qt.AlignmentFlag.AlignLeft)
+
+        # 6. Color Control (Visual Swatch + Hex)
+        color_lbl = QLabel("Color")
+        color_container = QWidget()
+        color_layout = QHBoxLayout(color_container)
+        color_layout.setContentsMargins(0, 0, 0, 0)
+        color_layout.setSpacing(6)
+
+        self.color_swatch = QPushButton()
+        self.color_swatch.setFixedSize(26, 22)
+        self.color_swatch.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.color_swatch.clicked.connect(self.choose_color)
+        self.update_color_swatch_style()
+        color_layout.addWidget(self.color_swatch)
+
+        self.color_hex_btn = QPushButton(self.color_hex)
+        self.color_hex_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.color_hex_btn.clicked.connect(self.choose_color)
+        color_layout.addWidget(self.color_hex_btn)
+
+        controls_layout.addWidget(color_lbl, 5, 0, Qt.AlignmentFlag.AlignRight)
+        controls_layout.addWidget(color_container, 5, 1, Qt.AlignmentFlag.AlignLeft)
+
+        main_layout.addWidget(controls_widget, 0, Qt.AlignmentFlag.AlignTop)
+
+        # Image Display Area (Right)
+        self.image_display_label = QLabel()
+        self.image_display_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.image_display_label.setFrameShape(QFrame.Shape.StyledPanel)
+        main_layout.addWidget(self.image_display_label, 1)
+
+    def update_color_swatch_style(self):
+        """Updates the color swatch background and border."""
+        self.color_swatch.setStyleSheet(
+            f"background-color: {self.color_hex}; border: 1px solid #777; border-radius: 3px;"
+        )
+
+    def on_text_changed(self, text):
+        self.refresh()
+
+    def on_font_changed(self, index):
+        if 0 <= index < len(self.fonts):
+            self.font_selected = self.fonts[index]
+            self.refresh()
+
+    def on_size_slider_changed(self, val):
+        self.size_val_lbl.setText(str(val))
+        if not self.updating_controls:
+            self.refresh()
+
+    def on_size_minus(self):
+        val = max(2, self.size_slider.value() - 2)
+        self.size_slider.setValue(val)
+
+    def on_size_plus(self):
+        val = min(150, self.size_slider.value() + 2)
+        self.size_slider.setValue(val)
+
+    def on_transp_slider_changed(self, val):
+        self.transp_val_lbl.setText(str(val))
+        if not self.updating_controls:
+            self.refresh()
+
+    def on_transp_minus(self):
+        val = max(0, self.transp_slider.value() - 5)
+        self.transp_slider.setValue(val)
+
+    def on_transp_plus(self):
+        val = min(255, self.transp_slider.value() + 5)
+        self.transp_slider.setValue(val)
+
+    def on_angle_slider_changed(self, val):
+        self.angle_val_lbl.setText(str(val))
+        if not self.updating_controls:
+            self.refresh()
+
+    def on_angle_minus(self):
+        val = max(0, self.angle_slider.value() - 5)
+        self.angle_slider.setValue(val)
+
+    def on_angle_plus(self):
+        val = min(360, self.angle_slider.value() + 5)
+        self.angle_slider.setValue(val)
+
+    def choose_color(self):
+        """Opens QColorDialog to select watermark color."""
+        initial = QColor(self.color_hex)
+        chosen = QColorDialog.getColor(initial, self, "Select Color")
+        if chosen.isValid():
+            self.text_color = (chosen.red(), chosen.green(), chosen.blue())
+            self.color_hex = chosen.name()
+            self.color_hex_btn.setText(self.color_hex)
+            self.update_color_swatch_style()
+            self.refresh()
+
+    def open_image(self):
+        """Opens an image file dialog."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Image File",
+            self.root_dir,
+            "Image Files (*.png *.jpg *.jpeg *.gif);;All Files (*)"
+        )
+        if file_path:
+            self.display_image_path = file_path
+            self.root_dir = os.path.dirname(file_path)
+            self.refresh()
+            self.center_window()
+
+    def save_image(self):
+        """Saves the watermarked image to user selected path."""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Image",
+            os.path.join(self.save_dir, "watermarked.png"),
+            "PNG Image (*.png);;All Files (*)"
+        )
+        if file_path:
+            temp_out = os.path.join(TMP_DIR, 'out.png')
+            if os.path.exists(temp_out):
+                shutil.copy(temp_out, file_path)
+                self.save_dir = os.path.dirname(file_path)
+                QMessageBox.information(self, "Info", "Image saved successfully")
+            else:
+                QMessageBox.critical(self, "Error", "Watermarked image could not be found.")
+
+    def show_about(self):
+        """Displays About modal dialog."""
+        dialog = AboutDialog(self)
+        dialog.exec()
+
+    def show_help(self):
+        """Displays Help modal dialog."""
+        dialog = HelpDialog(self)
+        dialog.exec()
+
+    def refresh(self):
+        """Renders the watermarked preview."""
+        if not os.path.exists(self.display_image_path):
+            return
+
         try:
-            font_obj = ImageFont.truetype(font_selected[1], font_size)
-        except Exception:
-            font_obj = ImageFont.load_default()
-    else:
-        font_obj = ImageFont.load_default()
+            base_image = Image.open(self.display_image_path).convert("RGBA")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to open image:\n{e}")
+            return
 
-    draw = ImageDraw.Draw(text_layer)
-    text = watermark_text_variable.get()
-
-    # Modern text bounding box calculation (Oportunidad 2)
-    if text:
-        bbox = draw.textbbox((0, 0), text, font=font_obj)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
+        # Keep preview within 600x600 px
         width, height = base_image.size
-        x = (width - text_width) / 2 - bbox[0]
-        y = (height - text_height) / 2 - bbox[1]
+        if width > 600 or height > 600:
+            base_image.thumbnail((600, 600))
+            width, height = base_image.size
 
-        fill_color = (text_color[0], text_color[1], text_color[2], int(transparency_variable.get()))
-        draw.text((x, y), text, fill=fill_color, font=font_obj)
+        text_layer = Image.new('RGBA', base_image.size, (255, 255, 255, 0))
 
-    rotated_text_layer = text_layer.rotate(int(angle_variable.get()))
+        font_size = self.size_slider.value()
+        if self.font_selected and self.font_selected[1] and os.path.exists(self.font_selected[1]):
+            try:
+                font_obj = ImageFont.truetype(self.font_selected[1], font_size)
+            except Exception:
+                font_obj = ImageFont.load_default()
+        else:
+            font_obj = ImageFont.load_default()
 
-    # Combining Original Image with Text and Saving to TMP_DIR
-    watermarked = Image.alpha_composite(base_image, rotated_text_layer)
-    temp_out_path = os.path.join(TMP_DIR, 'out.png')
-    watermarked.save(temp_out_path)
+        draw = ImageDraw.Draw(text_layer)
+        text = self.text_entry.text()
 
-    image_photo = ImageTk.PhotoImage(watermarked)
-    image_display_label.config(image=image_photo)
-    image_display_label.image = image_photo  # Retain reference to prevent garbage collection
+        # Exact text centering with draw.textbbox
+        if text:
+            bbox = draw.textbbox((0, 0), text, font=font_obj)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            x = (width - text_width) / 2 - bbox[0]
+            y = (height - text_height) / 2 - bbox[1]
 
-    win.config(cursor='')
+            fill_color = (
+                self.text_color[0],
+                self.text_color[1],
+                self.text_color[2],
+                self.transp_slider.value()
+            )
+            draw.text((x, y), text, fill=fill_color, font=font_obj)
 
-def dialog_select_color(dummy=None, title='Select color'):
-    global text_color
-    color, hex_color = colorchooser.askcolor(title=title, color=color_value_hex_variable.get())
-    if color and hex_color:
-        text_color = tuple(map(int, color))
-        color_value_hex_variable.set(hex_color)
-        color_swatch.config(bg=hex_color)
-        refresh()
-        return True
-    return False
+        rotated_text_layer = text_layer.rotate(self.angle_slider.value())
 
-def save_preferences():
-    """Saves current settings to an INI file."""
-    config = configparser.ConfigParser()
-    config['Settings'] = {
-        'text': watermark_text_variable.get(),
-        'font_name': font_selected[0] if font_selected else '',
-        'font_size': font_size_variable.get(),
-        'transparency': transparency_variable.get(),
-        'angle': angle_variable.get(),
-        'color_rgb': ','.join(map(str, text_color)),
-        'color_hex': color_value_hex_variable.get()
-    }
-    config['Paths'] = {
-        'last_image': display_image_path,
-        'last_save_dir': save_dir,
-        'last_open_dir': root_dir
-    }
-    try:
-        with open(CONFIG_FILE, 'w') as configfile:
-            config.write(configfile)
-    except IOError as e:
-        print(f"Error saving preferences: {e}")
+        # Alpha composite and save out.png
+        watermarked = Image.alpha_composite(base_image, rotated_text_layer)
+        temp_out = os.path.join(TMP_DIR, 'out.png')
+        watermarked.save(temp_out)
 
-def load_preferences():
-    """Loads settings from an INI file."""
-    global text_color, display_image_path, save_dir, root_dir, font_selected, updating_controls
-    if not os.path.exists(CONFIG_FILE):
-        return
+        # Convert PIL RGBA to QPixmap for QLabel display
+        im_rgba = watermarked.convert("RGBA")
+        data = im_rgba.tobytes("raw", "RGBA")
+        qimg = QImage(data, im_rgba.width, im_rgba.height, QImage.Format.Format_RGBA8888)
+        pixmap = QPixmap.fromImage(qimg)
+        self.image_display_label.setPixmap(pixmap)
 
-    config = configparser.ConfigParser()
-    config.read(CONFIG_FILE)
+    def center_window(self):
+        """Centers window on the primary screen."""
+        self.adjustSize()
+        screen = QApplication.primaryScreen()
+        if screen:
+            screen_geo = screen.availableGeometry()
+            win_geo = self.frameGeometry()
+            win_geo.moveCenter(screen_geo.center())
+            self.move(win_geo.topLeft())
 
-    if 'Settings' in config:
-        settings = config['Settings']
-        watermark_text_variable.set(settings.get('text', watermark_text_variable.get()))
-        
-        saved_size = settings.get('font_size', font_size_variable.get())
-        font_size_variable.set(saved_size)
-        
-        saved_transp = settings.get('transparency', transparency_variable.get())
-        transparency_variable.set(saved_transp)
-        
-        saved_angle = settings.get('angle', angle_variable.get())
-        angle_variable.set(saved_angle)
-
-        updating_controls = True
+    def save_preferences(self):
+        """Saves current settings to INI file."""
+        config = configparser.ConfigParser()
+        config['Settings'] = {
+            'text': self.text_entry.text(),
+            'font_name': self.font_selected[0] if self.font_selected else '',
+            'font_size': str(self.size_slider.value()),
+            'transparency': str(self.transp_slider.value()),
+            'angle': str(self.angle_slider.value()),
+            'color_rgb': ','.join(map(str, self.text_color)),
+            'color_hex': self.color_hex
+        }
+        config['Paths'] = {
+            'last_image': self.display_image_path,
+            'last_save_dir': self.save_dir,
+            'last_open_dir': self.root_dir
+        }
         try:
-            font_size_scale.set(int(saved_size))
-            transparency_scale.set(int(saved_transp))
-            angle_scale.set(int(saved_angle))
-        except ValueError:
-            pass
-        updating_controls = False
-
-        try:
-            rgb_str = settings.get('color_rgb', '0,0,0')
-            text_color = tuple(map(int, rgb_str.split(',')))
-            hex_str = settings.get('color_hex', '#000000')
-            color_value_hex_variable.set(hex_str)
-            color_swatch.config(bg=hex_str)
-        except (ValueError, IndexError):
-            text_color = (0, 0, 0)
-            color_value_hex_variable.set('#000000')
-            color_swatch.config(bg='#000000')
-
-        font_name_to_load = settings.get('font_name')
-        if font_name_to_load and fonts:
-            for i, font_item in enumerate(fonts):
-                if font_item[0].lower() == font_name_to_load.lower():
-                    listbox_fonts.select_clear(0, tk.END)
-                    listbox_fonts.select_set(i)
-                    listbox_fonts.see(i)
-                    font_selected = fonts[i]
-                    break
-
-    if 'Paths' in config:
-        paths = config['Paths']
-        last_image_path = paths.get('last_image', display_image_path)
-        if os.path.exists(last_image_path):
-            display_image_path = last_image_path
-        save_dir = paths.get('last_save_dir', save_dir)
-        root_dir = paths.get('last_open_dir', root_dir)
-
-def on_closing():
-    """Handles window closing event to save preferences."""
-    save_preferences()
-    win.destroy()
-
-# **** MAIN PROGRAM INITIALIZATION
-
-system_fonts = fm.findSystemFonts(fontpaths=None, fontext='ttf')
-
-fonts = []
-for font_path in system_fonts:
-    if '.ttf' in font_path.lower():
-        font_name = os.path.splitext(os.path.basename(font_path))[0].capitalize()
-        fonts.append([font_name, font_path])
-
-fonts.sort(key=lambda x: x[0])
-
-if not fonts:
-    fonts.append(["Default", ""])
-
-font_selected = fonts[0]
-
-win = tk.Tk()
-win.title(f'{PROGRAM_NAME}')
-win.resizable(False, False)
-
-icon_path = os.path.join(RESOURCES_DIR, 'logo.png')
-if os.path.exists(icon_path):
-    icon = ImageTk.PhotoImage(Image.open(icon_path))
-    win.iconphoto(False, icon)
-    win.icon = icon
-else:
-    icon = None
-
-win.protocol("WM_DELETE_WINDOW", on_closing)
-
-# **** MENU BAR
-
-menu_bar = tk.Menu(win)
-
-file_menu = tk.Menu(menu_bar, tearoff=0)
-file_menu.add_command(label="Open", command=open_image)
-file_menu.add_command(label="Save", command=save_image)
-file_menu.add_separator()
-file_menu.add_command(label="Exit", command=on_closing)
-
-help_menu = tk.Menu(menu_bar, tearoff=0)
-help_menu.add_command(label="Help", command=show_help)
-help_menu.add_command(label="About", command=show_about)
-
-menu_bar.add_cascade(label="File", menu=file_menu)
-menu_bar.add_cascade(label="Help", menu=help_menu)
-
-win.config(menu=menu_bar)
-
-# **** FRAMES
-
-controls_frame = tk.Frame(win, bg=None)
-image_frame = tk.Frame(win, bg=None)
-
-controls_frame.pack(side='left', fill='y', expand=False, padx=8, pady=8)
-image_frame.pack(side='right', fill='both', expand=True, padx=8, pady=8)
-
-# **** TEXT
-
-text_label = tk.Label(controls_frame, text="Text")
-watermark_text_variable = tk.StringVar(value='The Lazy Fox')
-watermark_text_variable.trace_add('write', watermark_text_variable_command)
-text_entry = tk.Entry(controls_frame, textvariable=watermark_text_variable, width=24)
-
-text_label.grid(row=0, column=0, sticky='e', padx=(0, 5), pady=3)
-text_entry.grid(row=0, column=1, sticky='w', pady=3)
-
-# **** FONT
-
-font_label = tk.Label(controls_frame, text="Font")
-font_label.grid(row=1, column=0, sticky='ne', padx=(0, 5), pady=3)
-
-font_selection_frame = tk.Frame(controls_frame)
-font_selection_frame.grid(row=1, column=1, sticky='w', pady=3)
-
-listbox_fonts = tk.Listbox(
-    font_selection_frame,
-    selectmode=tk.BROWSE,
-    height=6,
-    width=21
-)
-for font_item in fonts:
-    listbox_fonts.insert(tk.END, font_item[0])
-
-listbox_fonts.select_set(0)
-listbox_fonts.bind('<<ListboxSelect>>', change_font)
-listbox_fonts.pack(side='left', fill='y')
-
-font_list_scrollbar = tk.Scrollbar(font_selection_frame)
-font_list_scrollbar.pack(side='right', fill='y')
-font_list_scrollbar.configure(command=listbox_fonts.yview)
-listbox_fonts.configure(yscrollcommand=font_list_scrollbar.set)
-
-# Load control icons
-icon_minus_path = os.path.join(RESOURCES_DIR, 'icon_minus.png')
-icon_plus_path = os.path.join(RESOURCES_DIR, 'icon_plus.png')
-
-icon_minus = ImageTk.PhotoImage(Image.open(icon_minus_path)) if os.path.exists(icon_minus_path) else None
-icon_plus = ImageTk.PhotoImage(Image.open(icon_plus_path)) if os.path.exists(icon_plus_path) else None
-
-# **** FONT SIZE (Slider + Buttons)
-
-font_size_label = tk.Label(controls_frame, text="Size")
-font_size_label.grid(row=2, column=0, sticky='e', padx=(0, 5), pady=3)
-
-font_size_frame = tk.Frame(controls_frame)
-font_size_frame.grid(row=2, column=1, sticky='w', pady=3)
-
-if icon_minus:
-    icon_minus_label = tk.Label(font_size_frame, image=icon_minus, cursor='hand2')
-    icon_minus_label.image = icon_minus
-    icon_minus_label.bind('<Button-1>', icon_minus_command)
-    icon_minus_label.pack(side='left')
-
-font_size_variable = tk.StringVar(value='24')
-font_size_scale = ttk.Scale(
-    font_size_frame,
-    from_=2,
-    to=150,
-    orient='horizontal',
-    length=100,
-    command=on_font_size_scale
-)
-font_size_scale.set(24)
-font_size_scale.pack(side='left', padx=3)
-
-if icon_plus:
-    icon_plus_label = tk.Label(font_size_frame, image=icon_plus, cursor='hand2')
-    icon_plus_label.image = icon_plus
-    icon_plus_label.bind('<Button-1>', icon_plus_command)
-    icon_plus_label.pack(side='left')
-
-font_size_value_label = tk.Label(font_size_frame, textvariable=font_size_variable, width=4)
-font_size_value_label.pack(side='left', padx=2)
-
-# **** TRANSPARENCY (Slider + Buttons)
-
-transparency_label = tk.Label(controls_frame, text="Transparency")
-transparency_label.grid(row=3, column=0, sticky='e', padx=(0, 5), pady=3)
-
-transparency_frame = tk.Frame(controls_frame)
-transparency_frame.grid(row=3, column=1, sticky='w', pady=3)
-
-if icon_minus:
-    transparency_icon_minus_label = tk.Label(transparency_frame, image=icon_minus, cursor='hand2')
-    transparency_icon_minus_label.image = icon_minus
-    transparency_icon_minus_label.bind('<Button-1>', transparency_icon_minus_command)
-    transparency_icon_minus_label.pack(side='left')
-
-transparency_variable = tk.StringVar(value='125')
-transparency_scale = ttk.Scale(
-    transparency_frame,
-    from_=0,
-    to=255,
-    orient='horizontal',
-    length=100,
-    command=on_transparency_scale
-)
-transparency_scale.set(125)
-transparency_scale.pack(side='left', padx=3)
-
-if icon_plus:
-    transparency_icon_plus_label = tk.Label(transparency_frame, image=icon_plus, cursor='hand2')
-    transparency_icon_plus_label.image = icon_plus
-    transparency_icon_plus_label.bind('<Button-1>', transparency_icon_plus_command)
-    transparency_icon_plus_label.pack(side='left')
-
-transparency_value_label = tk.Label(transparency_frame, textvariable=transparency_variable, width=4)
-transparency_value_label.pack(side='left', padx=2)
-
-# **** ANGLE (Slider + Buttons)
-
-angle_label = tk.Label(controls_frame, text="Angle")
-angle_label.grid(row=4, column=0, sticky='e', padx=(0, 5), pady=3)
-
-angle_frame = tk.Frame(controls_frame)
-angle_frame.grid(row=4, column=1, sticky='w', pady=3)
-
-if icon_minus:
-    angle_icon_minus_label = tk.Label(angle_frame, image=icon_minus, cursor='hand2')
-    angle_icon_minus_label.image = icon_minus
-    angle_icon_minus_label.bind('<Button-1>', angle_icon_minus_command)
-    angle_icon_minus_label.pack(side='left')
-
-angle_variable = tk.StringVar(value='45')
-angle_scale = ttk.Scale(
-    angle_frame,
-    from_=0,
-    to=360,
-    orient='horizontal',
-    length=100,
-    command=on_angle_scale
-)
-angle_scale.set(45)
-angle_scale.pack(side='left', padx=3)
-
-if icon_plus:
-    angle_icon_plus_label = tk.Label(angle_frame, image=icon_plus, cursor='hand2')
-    angle_icon_plus_label.image = icon_plus
-    angle_icon_plus_label.bind('<Button-1>', angle_icon_plus_command)
-    angle_icon_plus_label.pack(side='left')
-
-angle_value_label = tk.Label(angle_frame, textvariable=angle_variable, width=4)
-angle_value_label.pack(side='left', padx=2)
-
-# **** COLOR (Visual Swatch + Hex Label)
-
-color_label = tk.Label(controls_frame, text="Color")
-color_label.grid(row=5, column=0, sticky='e', padx=(0, 5), pady=3)
-
-color_frame = tk.Frame(controls_frame)
-color_frame.grid(row=5, column=1, sticky='w', pady=3)
-
-color_value_hex_variable = tk.StringVar(value='#000000')
-
-color_swatch = tk.Label(
-    color_frame,
-    bg='#000000',
-    width=3,
-    height=1,
-    relief='groove',
-    borderwidth=2,
-    cursor='hand2'
-)
-color_swatch.pack(side='left', padx=(0, 6))
-color_swatch.bind('<Button-1>', dialog_select_color)
-
-color_value_label = tk.Label(
-    color_frame,
-    textvariable=color_value_hex_variable,
-    relief='sunken',
-    padx=6,
-    pady=1,
-    cursor='hand2'
-)
-color_value_label.pack(side='left', padx=(0, 6))
-color_value_label.bind('<Button-1>', dialog_select_color)
-
-# **** IMAGE DISPLAY
-
-initial_image = Image.open(display_image_path) if os.path.exists(display_image_path) else Image.new('RGBA', (300, 300), (200, 200, 200, 255))
-image1_width, image1_height = initial_image.size
-if image1_width > 600 or image1_height > 600:
-    initial_image.thumbnail((600, 600))
-    image1_width, image1_height = initial_image.size
-
-image_photo = ImageTk.PhotoImage(initial_image)
-image_display_label = tk.Label(image_frame, image=image_photo)
-image_display_label.image = image_photo
-image_display_label.pack()
-
-# **** EXECUTION
-
-load_preferences()
-change_font()
-refresh()
-center_window()
-win.mainloop()
+            with open(CONFIG_FILE, 'w') as configfile:
+                config.write(configfile)
+        except IOError as e:
+            print(f"Error saving preferences: {e}")
+
+    def load_preferences(self):
+        """Loads settings from INI file."""
+        if not os.path.exists(CONFIG_FILE):
+            return
+
+        config = configparser.ConfigParser()
+        config.read(CONFIG_FILE)
+
+        self.updating_controls = True
+
+        if 'Settings' in config:
+            settings = config['Settings']
+            self.text_entry.setText(settings.get('text', self.text_entry.text()))
+
+            try:
+                size_val = int(settings.get('font_size', '24'))
+                self.size_slider.setValue(size_val)
+                self.size_val_lbl.setText(str(size_val))
+            except ValueError:
+                pass
+
+            try:
+                transp_val = int(settings.get('transparency', '125'))
+                self.transp_slider.setValue(transp_val)
+                self.transp_val_lbl.setText(str(transp_val))
+            except ValueError:
+                pass
+
+            try:
+                angle_val = int(settings.get('angle', '45'))
+                self.angle_slider.setValue(angle_val)
+                self.angle_val_lbl.setText(str(angle_val))
+            except ValueError:
+                pass
+
+            try:
+                rgb_str = settings.get('color_rgb', '0,0,0')
+                self.text_color = tuple(map(int, rgb_str.split(',')))
+                self.color_hex = settings.get('color_hex', '#000000')
+                self.color_hex_btn.setText(self.color_hex)
+                self.update_color_swatch_style()
+            except (ValueError, IndexError):
+                self.text_color = (0, 0, 0)
+                self.color_hex = '#000000'
+
+            font_name_to_load = settings.get('font_name')
+            if font_name_to_load and self.fonts:
+                for i, font_item in enumerate(self.fonts):
+                    if font_item[0].lower() == font_name_to_load.lower():
+                        self.font_list.setCurrentRow(i)
+                        self.font_selected = self.fonts[i]
+                        break
+
+        if 'Paths' in config:
+            paths = config['Paths']
+            last_image = paths.get('last_image', self.display_image_path)
+            if os.path.exists(last_image):
+                self.display_image_path = last_image
+            self.save_dir = paths.get('last_save_dir', self.save_dir)
+            self.root_dir = paths.get('last_open_dir', self.root_dir)
+
+        self.updating_controls = False
+
+    def closeEvent(self, event):
+        """Handles window closing event to save preferences."""
+        self.save_preferences()
+        event.accept()
+
+
+def main():
+    app = QApplication(sys.argv)
+    window = WatermarkerApp()
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == '__main__':
+    main()
