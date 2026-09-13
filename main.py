@@ -6,7 +6,7 @@ A modern desktop application to apply text watermarks to images.
 import sys
 import os
 import shutil
-import configparser
+import xml.etree.ElementTree as ET
 from PIL import Image, ImageFont, ImageDraw
 import matplotlib.font_manager as fm
 
@@ -26,9 +26,11 @@ RESOURCES_DIR = os.path.join(BASE_DIR, 'resources')
 TMP_DIR = os.path.join(BASE_DIR, 'tmp')
 os.makedirs(TMP_DIR, exist_ok=True)
 
-CONFIG_FILE = os.path.join(BASE_DIR, 'watermarker.ini')
+CONFIG_DIR = os.path.join(os.path.expanduser('~'), '.config', 'watermarker')
+CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.xml')
+os.makedirs(CONFIG_DIR, exist_ok=True)
 PROGRAM_NAME = 'WaterMarker'
-PROGRAM_VERSION = '1.0.0'
+PROGRAM_VERSION = '1.1.0'
 PROGRAM_DESCRIPTION = 'Set a text watermark\nthe easy way\n\nProgram by @edfasano70'
 
 
@@ -133,6 +135,28 @@ class HelpDialog(QDialog):
 class WatermarkerApp(QMainWindow):
     """Main application window using PyQt6."""
 
+    DARK_STYLE = """
+        QMainWindow, QWidget { background-color: #1e1e1e; color: #e0e0e0; }
+        QMenuBar { background-color: #2d2d2d; color: #e0e0e0; }
+        QMenuBar::item:selected { background-color: #3d3d3d; }
+        QMenu { background-color: #2d2d2d; color: #e0e0e0; }
+        QMenu::item:selected { background-color: #CDDC39; color: #1e1e1e; }
+        QLabel { color: #e0e0e0; }
+        QLineEdit { background-color: #3d3d3d; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 4px; }
+        QListWidget { background-color: #3d3d3d; color: #e0e0e0; border: 1px solid #555; }
+        QListWidget::item:selected { background-color: #CDDC39; color: #1e1e1e; }
+        QSlider::groove:horizontal { background: #555; height: 6px; border-radius: 3px; }
+        QSlider::handle:horizontal { background: #CDDC39; width: 14px; margin: -4px 0; border-radius: 7px; }
+        QToolButton { background-color: #3d3d3d; border: 1px solid #555; border-radius: 3px; }
+        QToolButton:hover { background-color: #4d4d4d; }
+        QPushButton { background-color: #3d3d3d; border: 1px solid #555; border-radius: 3px; padding: 4px 8px; }
+        QPushButton:hover { background-color: #4d4d4d; }
+        QFrame { border: 1px solid #555; }
+        QMenuBar::item { padding: 4px 8px; }
+    """
+
+    LIGHT_STYLE = ""
+
     def __init__(self):
         super().__init__()
         self.root_dir = BASE_DIR
@@ -141,6 +165,7 @@ class WatermarkerApp(QMainWindow):
         self.text_color = (0, 0, 0)
         self.color_hex = "#000000"
         self.updating_controls = False
+        self.dark_mode = False
 
         self.init_fonts()
         self.init_ui()
@@ -174,31 +199,43 @@ class WatermarkerApp(QMainWindow):
 
         # File Menu
         file_menu = menu_bar.addMenu("File")
-        open_action = QAction("Open", self)
+        open_icon = QIcon(os.path.join(RESOURCES_DIR, 'icons', 'open.svg'))
+        open_action = QAction(open_icon, "Open", self)
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.open_image)
         file_menu.addAction(open_action)
 
-        save_action = QAction("Save", self)
+        save_icon = QIcon(os.path.join(RESOURCES_DIR, 'icons', 'save.svg'))
+        save_action = QAction(save_icon, "Save", self)
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save_image)
         file_menu.addAction(save_action)
 
         file_menu.addSeparator()
 
-        exit_action = QAction("Exit", self)
+        exit_icon = QIcon(os.path.join(RESOURCES_DIR, 'icons', 'exit.svg'))
+        exit_action = QAction(exit_icon, "Exit", self)
         exit_action.setShortcut("Ctrl+Q")
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
+        # View Menu (before Help)
+        view_menu = menu_bar.addMenu("View")
+        self.dark_mode_action = QAction("Dark Mode", self)
+        self.dark_mode_action.setCheckable(True)
+        self.dark_mode_action.triggered.connect(self.toggle_dark_mode)
+        view_menu.addAction(self.dark_mode_action)
+
         # Help Menu
         help_menu = menu_bar.addMenu("Help")
-        help_action = QAction("Help", self)
+        help_icon = QIcon(os.path.join(RESOURCES_DIR, 'icons', 'help.svg'))
+        help_action = QAction(help_icon, "Help", self)
         help_action.setShortcut("F1")
         help_action.triggered.connect(self.show_help)
         help_menu.addAction(help_action)
 
-        about_action = QAction("About", self)
+        about_icon = QIcon(os.path.join(RESOURCES_DIR, 'icons', 'about.svg'))
+        about_action = QAction(about_icon, "About", self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
 
@@ -375,6 +412,16 @@ class WatermarkerApp(QMainWindow):
             f"background-color: {self.color_hex}; border: 1px solid #777; border-radius: 3px;"
         )
 
+    def toggle_dark_mode(self, checked):
+        """Toggles between dark and light mode."""
+        self.dark_mode = checked
+        if checked:
+            self.setStyleSheet(self.DARK_STYLE)
+            self.dark_mode_action.setText("Light Mode")
+        else:
+            self.setStyleSheet(self.LIGHT_STYLE)
+            self.dark_mode_action.setText("Dark Mode")
+
     def on_text_changed(self, text):
         self.refresh()
 
@@ -546,88 +593,120 @@ class WatermarkerApp(QMainWindow):
             self.move(win_geo.topLeft())
 
     def save_preferences(self):
-        """Saves current settings to INI file."""
-        config = configparser.ConfigParser()
-        config['Settings'] = {
-            'text': self.text_entry.text(),
-            'font_name': self.font_selected[0] if self.font_selected else '',
-            'font_size': str(self.size_slider.value()),
-            'transparency': str(self.transp_slider.value()),
-            'angle': str(self.angle_slider.value()),
-            'color_rgb': ','.join(map(str, self.text_color)),
-            'color_hex': self.color_hex
-        }
-        config['Paths'] = {
-            'last_image': self.display_image_path,
-            'last_save_dir': self.save_dir,
-            'last_open_dir': self.root_dir
-        }
+        """Saves current settings to XML file."""
+        root = ET.Element('watermarker')
+
+        settings = ET.SubElement(root, 'settings')
+        ET.SubElement(settings, 'text').text = self.text_entry.text()
+        ET.SubElement(settings, 'font_name').text = self.font_selected[0] if self.font_selected else ''
+        ET.SubElement(settings, 'font_size').text = str(self.size_slider.value())
+        ET.SubElement(settings, 'transparency').text = str(self.transp_slider.value())
+        ET.SubElement(settings, 'angle').text = str(self.angle_slider.value())
+        ET.SubElement(settings, 'color_rgb').text = ','.join(map(str, self.text_color))
+        ET.SubElement(settings, 'color_hex').text = self.color_hex
+        ET.SubElement(settings, 'dark_mode').text = str(self.dark_mode).lower()
+
+        paths = ET.SubElement(root, 'paths')
+        ET.SubElement(paths, 'last_image').text = self.display_image_path
+        ET.SubElement(paths, 'last_save_dir').text = self.save_dir
+        ET.SubElement(paths, 'last_open_dir').text = self.root_dir
+
+        tree = ET.ElementTree(root)
         try:
-            with open(CONFIG_FILE, 'w') as configfile:
-                config.write(configfile)
+            tree.write(CONFIG_FILE, encoding='utf-8', xml_declaration=True)
         except IOError as e:
             print(f"Error saving preferences: {e}")
 
     def load_preferences(self):
-        """Loads settings from INI file."""
+        """Loads settings from XML file."""
         if not os.path.exists(CONFIG_FILE):
             return
 
-        config = configparser.ConfigParser()
-        config.read(CONFIG_FILE)
+        try:
+            tree = ET.parse(CONFIG_FILE)
+            root = tree.getroot()
+        except ET.ParseError:
+            return
 
         self.updating_controls = True
 
-        if 'Settings' in config:
-            settings = config['Settings']
-            self.text_entry.setText(settings.get('text', self.text_entry.text()))
+        settings = root.find('settings')
+        if settings is not None:
+            text_elem = settings.find('text')
+            if text_elem is not None and text_elem.text:
+                self.text_entry.setText(text_elem.text)
 
-            try:
-                size_val = int(settings.get('font_size', '24'))
-                self.size_slider.setValue(size_val)
-                self.size_val_lbl.setText(str(size_val))
-            except ValueError:
-                pass
+            font_size_elem = settings.find('font_size')
+            if font_size_elem is not None:
+                try:
+                    size_val = int(font_size_elem.text)
+                    self.size_slider.setValue(size_val)
+                    self.size_val_lbl.setText(str(size_val))
+                except (ValueError, TypeError):
+                    pass
 
-            try:
-                transp_val = int(settings.get('transparency', '125'))
-                self.transp_slider.setValue(transp_val)
-                self.transp_val_lbl.setText(str(transp_val))
-            except ValueError:
-                pass
+            transparency_elem = settings.find('transparency')
+            if transparency_elem is not None:
+                try:
+                    transp_val = int(transparency_elem.text)
+                    self.transp_slider.setValue(transp_val)
+                    self.transp_val_lbl.setText(str(transp_val))
+                except (ValueError, TypeError):
+                    pass
 
-            try:
-                angle_val = int(settings.get('angle', '45'))
-                self.angle_slider.setValue(angle_val)
-                self.angle_val_lbl.setText(str(angle_val))
-            except ValueError:
-                pass
+            angle_elem = settings.find('angle')
+            if angle_elem is not None:
+                try:
+                    angle_val = int(angle_elem.text)
+                    self.angle_slider.setValue(angle_val)
+                    self.angle_val_lbl.setText(str(angle_val))
+                except (ValueError, TypeError):
+                    pass
 
-            try:
-                rgb_str = settings.get('color_rgb', '0,0,0')
-                self.text_color = tuple(map(int, rgb_str.split(',')))
-                self.color_hex = settings.get('color_hex', '#000000')
-                self.color_hex_btn.setText(self.color_hex)
-                self.update_color_swatch_style()
-            except (ValueError, IndexError):
-                self.text_color = (0, 0, 0)
+            color_rgb_elem = settings.find('color_rgb')
+            color_hex_elem = settings.find('color_hex')
+            if color_rgb_elem is not None:
+                try:
+                    self.text_color = tuple(map(int, color_rgb_elem.text.split(',')))
+                except (ValueError, IndexError, TypeError):
+                    self.text_color = (0, 0, 0)
+            if color_hex_elem is not None and color_hex_elem.text:
+                self.color_hex = color_hex_elem.text
+            else:
                 self.color_hex = '#000000'
+            self.color_hex_btn.setText(self.color_hex)
+            self.update_color_swatch_style()
 
-            font_name_to_load = settings.get('font_name')
-            if font_name_to_load and self.fonts:
+            font_name_elem = settings.find('font_name')
+            if font_name_elem is not None and font_name_elem.text and self.fonts:
+                font_name_to_load = font_name_elem.text
                 for i, font_item in enumerate(self.fonts):
                     if font_item[0].lower() == font_name_to_load.lower():
                         self.font_list.setCurrentRow(i)
                         self.font_selected = self.fonts[i]
                         break
 
-        if 'Paths' in config:
-            paths = config['Paths']
-            last_image = paths.get('last_image', self.display_image_path)
-            if os.path.exists(last_image):
-                self.display_image_path = last_image
-            self.save_dir = paths.get('last_save_dir', self.save_dir)
-            self.root_dir = paths.get('last_open_dir', self.root_dir)
+            dark_mode_elem = settings.find('dark_mode')
+            if dark_mode_elem is not None and dark_mode_elem.text:
+                self.dark_mode = dark_mode_elem.text.lower() == 'true'
+                self.dark_mode_action.setChecked(self.dark_mode)
+                self.toggle_dark_mode(self.dark_mode)
+
+        paths = root.find('paths')
+        if paths is not None:
+            last_image_elem = paths.find('last_image')
+            if last_image_elem is not None and last_image_elem.text:
+                last_image = last_image_elem.text
+                if os.path.exists(last_image):
+                    self.display_image_path = last_image
+
+            last_save_dir_elem = paths.find('last_save_dir')
+            if last_save_dir_elem is not None and last_save_dir_elem.text:
+                self.save_dir = last_save_dir_elem.text
+
+            last_open_dir_elem = paths.find('last_open_dir')
+            if last_open_dir_elem is not None and last_open_dir_elem.text:
+                self.root_dir = last_open_dir_elem.text
 
         self.updating_controls = False
 
