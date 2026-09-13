@@ -1,6 +1,6 @@
 """
-WaterMarker - PyQt6 Implementation
-A modern desktop application to apply text watermarks to images.
+WaterMarker - Implementación PyQt6
+Una aplicación de escritorio moderna para aplicar marcas de agua de texto a imágenes.
 """
 
 import sys
@@ -30,18 +30,22 @@ CONFIG_DIR = os.path.join(os.path.expanduser('~'), '.config', 'watermarker')
 CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.xml')
 os.makedirs(CONFIG_DIR, exist_ok=True)
 PROGRAM_NAME = 'WaterMarker'
-PROGRAM_VERSION = '1.1.0'
-PROGRAM_DESCRIPTION = 'Set a text watermark\nthe easy way\n\nProgram by @edfasano70'
+PROGRAM_VERSION = '1.2.0'
+PROGRAM_DESCRIPTION = 'Aplica marcas de agua de texto\nde forma sencilla\n\nPrograma por @edfasano70'
 
 
 class AboutDialog(QDialog):
-    """Modal dialog displaying application information."""
+    """Diálogo modal que muestra información de la aplicación."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("About")
+        self.setWindowTitle("Acerca de")
         self.setFixedSize(300, 320)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        self.setStyleSheet("""
+            QDialog { border: none; }
+            QLabel { border: none; background: transparent; }
+        """)
 
         logo_path = os.path.join(RESOURCES_DIR, 'logo.png')
         if os.path.exists(logo_path):
@@ -84,18 +88,18 @@ class AboutDialog(QDialog):
         layout.addSpacing(10)
 
         # Close button
-        close_btn = QPushButton("Close")
+        close_btn = QPushButton("Cerrar")
         close_btn.setFixedWidth(90)
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
 
 class HelpDialog(QDialog):
-    """Modal dialog displaying application help and instructions."""
+    """Diálogo modal que muestra ayuda e instrucciones de la aplicación."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Help - WaterMarker")
+        self.setWindowTitle("Ayuda - WaterMarker")
         self.setFixedSize(390, 340)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
@@ -106,18 +110,18 @@ class HelpDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
 
-        title_label = QLabel("How to use WaterMarker")
+        title_label = QLabel("Cómo usar WaterMarker")
         title_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         layout.addWidget(title_label)
 
         instructions = (
-            "1. Open an image using <b>File &rarr; Open</b>.<br>"
-            "2. Enter your watermark text in the <b>Text</b> field.<br>"
-            "3. Choose a font from the <b>Font</b> list.<br>"
-            "4. Adjust <b>Size</b>, <b>Transparency</b>, and <b>Angle</b> using the sliders or +/- buttons.<br>"
-            "5. Click on the <b>Color</b> box to choose a text color.<br>"
-            "6. Save your watermarked image using <b>File &rarr; Save</b>.<br><br>"
-            "<i>Preferences and recent folders are automatically saved on exit.</i>"
+            "1. Abre una imagen usando <b>Archivo &rarr; Abrir</b>.<br>"
+            "2. Escribe tu texto de marca de agua en el campo <b>Texto</b>.<br>"
+            "3. Elige una fuente de la lista <b>Fuente</b>.<br>"
+            "4. Ajusta <b>Tamaño</b>, <b>Transparencia</b> y <b>Ángulo</b> usando los controles deslizantes o los botones +/-.<br>"
+            "5. Haz clic en el cuadro de <b>Color</b> para elegir un color de texto.<br>"
+            "6. Guarda tu imagen con marca de agua usando <b>Archivo &rarr; Guardar</b>.<br><br>"
+            "<i>Las preferencias y carpetas recientes se guardan automáticamente al salir.</i>"
         )
         text_label = QLabel(instructions)
         text_label.setFont(QFont("Arial", 9))
@@ -126,14 +130,14 @@ class HelpDialog(QDialog):
 
         layout.addStretch()
 
-        close_btn = QPushButton("Close")
+        close_btn = QPushButton("Cerrar")
         close_btn.setFixedWidth(90)
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
 
 class WatermarkerApp(QMainWindow):
-    """Main application window using PyQt6."""
+    """Ventana principal de la aplicación usando PyQt6."""
 
     DARK_STYLE = """
         QMainWindow, QWidget { background-color: #1e1e1e; color: #e0e0e0; }
@@ -141,7 +145,7 @@ class WatermarkerApp(QMainWindow):
         QMenuBar::item:selected { background-color: #3d3d3d; }
         QMenu { background-color: #2d2d2d; color: #e0e0e0; }
         QMenu::item:selected { background-color: #CDDC39; color: #1e1e1e; }
-        QLabel { color: #e0e0e0; }
+        QLabel { color: #e0e0e0; border: none; }
         QLineEdit { background-color: #3d3d3d; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 4px; }
         QListWidget { background-color: #3d3d3d; color: #e0e0e0; border: 1px solid #555; }
         QListWidget::item:selected { background-color: #CDDC39; color: #1e1e1e; }
@@ -151,7 +155,7 @@ class WatermarkerApp(QMainWindow):
         QToolButton:hover { background-color: #4d4d4d; }
         QPushButton { background-color: #3d3d3d; border: 1px solid #555; border-radius: 3px; padding: 4px 8px; }
         QPushButton:hover { background-color: #4d4d4d; }
-        QFrame { border: 1px solid #555; }
+        QFrame { border: none; }
         QMenuBar::item { padding: 4px 8px; }
     """
 
@@ -188,25 +192,25 @@ class WatermarkerApp(QMainWindow):
         self.font_selected = self.fonts[0]
 
     def init_ui(self):
-        """Builds the PyQt6 user interface."""
+        """Construye la interfaz de usuario PyQt6."""
         self.setWindowTitle(PROGRAM_NAME)
         logo_path = os.path.join(RESOURCES_DIR, 'logo.png')
         if os.path.exists(logo_path):
             self.setWindowIcon(QIcon(logo_path))
 
-        # Menu Bar
+        # Barra de Menú
         menu_bar = self.menuBar()
 
-        # File Menu
-        file_menu = menu_bar.addMenu("File")
+        # Menú Archivo
+        file_menu = menu_bar.addMenu("Archivo")
         open_icon = QIcon(os.path.join(RESOURCES_DIR, 'icons', 'open.svg'))
-        open_action = QAction(open_icon, "Open", self)
+        open_action = QAction(open_icon, "Abrir", self)
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.open_image)
         file_menu.addAction(open_action)
 
         save_icon = QIcon(os.path.join(RESOURCES_DIR, 'icons', 'save.svg'))
-        save_action = QAction(save_icon, "Save", self)
+        save_action = QAction(save_icon, "Guardar", self)
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save_image)
         file_menu.addAction(save_action)
@@ -214,28 +218,28 @@ class WatermarkerApp(QMainWindow):
         file_menu.addSeparator()
 
         exit_icon = QIcon(os.path.join(RESOURCES_DIR, 'icons', 'exit.svg'))
-        exit_action = QAction(exit_icon, "Exit", self)
+        exit_action = QAction(exit_icon, "Salir", self)
         exit_action.setShortcut("Ctrl+Q")
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
-        # View Menu (before Help)
-        view_menu = menu_bar.addMenu("View")
-        self.dark_mode_action = QAction("Dark Mode", self)
-        self.dark_mode_action.setCheckable(True)
+        # Menú Ver (antes de Ayuda)
+        view_menu = menu_bar.addMenu("Ver")
+        toggle_mode_icon = QIcon(os.path.join(RESOURCES_DIR, 'icons', 'toggle_mode.svg'))
+        self.dark_mode_action = QAction(toggle_mode_icon, "Alternar Modo Oscuro/Claro", self)
         self.dark_mode_action.triggered.connect(self.toggle_dark_mode)
         view_menu.addAction(self.dark_mode_action)
 
-        # Help Menu
-        help_menu = menu_bar.addMenu("Help")
+        # Menú Ayuda
+        help_menu = menu_bar.addMenu("Ayuda")
         help_icon = QIcon(os.path.join(RESOURCES_DIR, 'icons', 'help.svg'))
-        help_action = QAction(help_icon, "Help", self)
+        help_action = QAction(help_icon, "Ayuda", self)
         help_action.setShortcut("F1")
         help_action.triggered.connect(self.show_help)
         help_menu.addAction(help_action)
 
         about_icon = QIcon(os.path.join(RESOURCES_DIR, 'icons', 'about.svg'))
-        about_action = QAction(about_icon, "About", self)
+        about_action = QAction(about_icon, "Acerca de", self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
 
@@ -254,14 +258,14 @@ class WatermarkerApp(QMainWindow):
         controls_layout.setHorizontalSpacing(8)
 
         # 1. Text Entry
-        text_lbl = QLabel("Text")
-        self.text_entry = QLineEdit("The Lazy Fox")
+        text_lbl = QLabel("Texto")
+        self.text_entry = QLineEdit("El Zorro Peregroso")
         self.text_entry.textChanged.connect(self.on_text_changed)
         controls_layout.addWidget(text_lbl, 0, 0, Qt.AlignmentFlag.AlignRight)
         controls_layout.addWidget(self.text_entry, 0, 1)
 
         # 2. Font List
-        font_lbl = QLabel("Font")
+        font_lbl = QLabel("Fuente")
         self.font_list = QListWidget()
         self.font_list.setFixedHeight(110)
         for font_name, _ in self.fonts:
@@ -278,7 +282,7 @@ class WatermarkerApp(QMainWindow):
         plus_icon = QIcon(plus_icon_path) if os.path.exists(plus_icon_path) else QIcon()
 
         # 3. Size Control (Slider + Buttons)
-        size_lbl = QLabel("Size")
+        size_lbl = QLabel("Tamaño")
         size_container = QWidget()
         size_layout = QHBoxLayout(size_container)
         size_layout.setContentsMargins(0, 0, 0, 0)
@@ -311,7 +315,7 @@ class WatermarkerApp(QMainWindow):
         controls_layout.addWidget(size_container, 2, 1, Qt.AlignmentFlag.AlignLeft)
 
         # 4. Transparency Control (Slider + Buttons)
-        transp_lbl = QLabel("Transparency")
+        transp_lbl = QLabel("Transparencia")
         transp_container = QWidget()
         transp_layout = QHBoxLayout(transp_container)
         transp_layout.setContentsMargins(0, 0, 0, 0)
@@ -344,7 +348,7 @@ class WatermarkerApp(QMainWindow):
         controls_layout.addWidget(transp_container, 3, 1, Qt.AlignmentFlag.AlignLeft)
 
         # 5. Angle Control (Slider + Buttons)
-        angle_lbl = QLabel("Angle")
+        angle_lbl = QLabel("Ángulo")
         angle_container = QWidget()
         angle_layout = QHBoxLayout(angle_container)
         angle_layout.setContentsMargins(0, 0, 0, 0)
@@ -403,7 +407,6 @@ class WatermarkerApp(QMainWindow):
         # Image Display Area (Right)
         self.image_display_label = QLabel()
         self.image_display_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_display_label.setFrameShape(QFrame.Shape.StyledPanel)
         main_layout.addWidget(self.image_display_label, 1)
 
     def update_color_swatch_style(self):
@@ -412,15 +415,13 @@ class WatermarkerApp(QMainWindow):
             f"background-color: {self.color_hex}; border: 1px solid #777; border-radius: 3px;"
         )
 
-    def toggle_dark_mode(self, checked):
-        """Toggles between dark and light mode."""
-        self.dark_mode = checked
-        if checked:
+    def toggle_dark_mode(self):
+        """Alterna entre modo oscuro y claro."""
+        self.dark_mode = not self.dark_mode
+        if self.dark_mode:
             self.setStyleSheet(self.DARK_STYLE)
-            self.dark_mode_action.setText("Light Mode")
         else:
             self.setStyleSheet(self.LIGHT_STYLE)
-            self.dark_mode_action.setText("Dark Mode")
 
     def on_text_changed(self, text):
         self.refresh()
@@ -470,9 +471,9 @@ class WatermarkerApp(QMainWindow):
         self.angle_slider.setValue(val)
 
     def choose_color(self):
-        """Opens QColorDialog to select watermark color."""
+        """Abre el diálogo de QColorDialog para seleccionar el color de la marca de agua."""
         initial = QColor(self.color_hex)
-        chosen = QColorDialog.getColor(initial, self, "Select Color")
+        chosen = QColorDialog.getColor(initial, self, "Seleccionar Color")
         if chosen.isValid():
             self.text_color = (chosen.red(), chosen.green(), chosen.blue())
             self.color_hex = chosen.name()
@@ -481,12 +482,12 @@ class WatermarkerApp(QMainWindow):
             self.refresh()
 
     def open_image(self):
-        """Opens an image file dialog."""
+        """Abre un diálogo de selección de archivo de imagen."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select Image File",
+            "Seleccionar Archivo de Imagen",
             self.root_dir,
-            "Image Files (*.png *.jpg *.jpeg *.gif);;All Files (*)"
+            "Archivos de Imagen (*.png *.jpg *.jpeg *.gif);;Todos los Archivos (*)"
         )
         if file_path:
             self.display_image_path = file_path
@@ -495,41 +496,41 @@ class WatermarkerApp(QMainWindow):
             self.center_window()
 
     def save_image(self):
-        """Saves the watermarked image to user selected path."""
+        """Guarda la imagen con marca de agua en la ruta seleccionada por el usuario."""
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save Image",
-            os.path.join(self.save_dir, "watermarked.png"),
-            "PNG Image (*.png);;All Files (*)"
+            "Guardar Imagen",
+            os.path.join(self.save_dir, "marcadeagua.png"),
+            "Imagen PNG (*.png);;Todos los Archivos (*)"
         )
         if file_path:
             temp_out = os.path.join(TMP_DIR, 'out.png')
             if os.path.exists(temp_out):
                 shutil.copy(temp_out, file_path)
                 self.save_dir = os.path.dirname(file_path)
-                QMessageBox.information(self, "Info", "Image saved successfully")
+                QMessageBox.information(self, "Info", "Imagen guardada exitosamente")
             else:
-                QMessageBox.critical(self, "Error", "Watermarked image could not be found.")
+                QMessageBox.critical(self, "Error", "No se pudo encontrar la imagen con marca de agua.")
 
     def show_about(self):
-        """Displays About modal dialog."""
+        """Muestra el diálogo modal Acerca de."""
         dialog = AboutDialog(self)
         dialog.exec()
 
     def show_help(self):
-        """Displays Help modal dialog."""
+        """Muestra el diálogo modal de Ayuda."""
         dialog = HelpDialog(self)
         dialog.exec()
 
     def refresh(self):
-        """Renders the watermarked preview."""
+        """Renderiza la vista previa con marca de agua."""
         if not os.path.exists(self.display_image_path):
             return
 
         try:
             base_image = Image.open(self.display_image_path).convert("RGBA")
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to open image:\n{e}")
+            QMessageBox.critical(self, "Error", f"Error al abrir la imagen:\n{e}")
             return
 
         # Keep preview within 600x600 px
@@ -583,7 +584,7 @@ class WatermarkerApp(QMainWindow):
         self.image_display_label.setPixmap(pixmap)
 
     def center_window(self):
-        """Centers window on the primary screen."""
+        """Centra la ventana en la pantalla principal."""
         self.adjustSize()
         screen = QApplication.primaryScreen()
         if screen:
@@ -593,7 +594,7 @@ class WatermarkerApp(QMainWindow):
             self.move(win_geo.topLeft())
 
     def save_preferences(self):
-        """Saves current settings to XML file."""
+        """Guarda la configuración actual en el archivo XML."""
         root = ET.Element('watermarker')
 
         settings = ET.SubElement(root, 'settings')
@@ -615,10 +616,10 @@ class WatermarkerApp(QMainWindow):
         try:
             tree.write(CONFIG_FILE, encoding='utf-8', xml_declaration=True)
         except IOError as e:
-            print(f"Error saving preferences: {e}")
+            print(f"Error al guardar preferencias: {e}")
 
     def load_preferences(self):
-        """Loads settings from XML file."""
+        """Carga la configuración desde el archivo XML."""
         if not os.path.exists(CONFIG_FILE):
             return
 
@@ -689,8 +690,8 @@ class WatermarkerApp(QMainWindow):
             dark_mode_elem = settings.find('dark_mode')
             if dark_mode_elem is not None and dark_mode_elem.text:
                 self.dark_mode = dark_mode_elem.text.lower() == 'true'
-                self.dark_mode_action.setChecked(self.dark_mode)
-                self.toggle_dark_mode(self.dark_mode)
+                if self.dark_mode:
+                    self.setStyleSheet(self.DARK_STYLE)
 
         paths = root.find('paths')
         if paths is not None:
@@ -711,7 +712,7 @@ class WatermarkerApp(QMainWindow):
         self.updating_controls = False
 
     def closeEvent(self, event):
-        """Handles window closing event to save preferences."""
+        """Maneja el evento de cierre de ventana para guardar preferencias."""
         self.save_preferences()
         event.accept()
 
