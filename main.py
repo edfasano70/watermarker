@@ -228,13 +228,13 @@ class WatermarkerApp(QMainWindow):
         QMenuBar { background-color: #2d2d2d; color: #e0e0e0; }
         QMenuBar::item:selected { background-color: #3d3d3d; }
         QMenu { background-color: #2d2d2d; color: #e0e0e0; }
-        QMenu::item:selected { background-color: #CDDC39; color: #1e1e1e; }
+        QMenu::item:selected { background-color: #FF9800; color: #1e1e1e; }
         QLabel { color: #e0e0e0; border: none; }
         QLineEdit { background-color: #3d3d3d; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 4px; }
         QListWidget { background-color: #3d3d3d; color: #e0e0e0; border: 1px solid #555; }
-        QListWidget::item:selected { background-color: #CDDC39; color: #1e1e1e; }
+        QListWidget::item:selected { background-color: #FF9800; color: #1e1e1e; }
         QSlider::groove:horizontal { background: #555; height: 6px; border-radius: 3px; }
-        QSlider::handle:horizontal { background: #CDDC39; width: 14px; margin: -4px 0; border-radius: 7px; }
+        QSlider::handle:horizontal { background: #FF9800; width: 14px; margin: -4px 0; border-radius: 7px; }
         QToolButton { background-color: #3d3d3d; border: 1px solid #555; border-radius: 3px; }
         QToolButton:hover { background-color: #4d4d4d; }
         QPushButton { background-color: #3d3d3d; border: 1px solid #555; border-radius: 3px; padding: 4px 8px; }
