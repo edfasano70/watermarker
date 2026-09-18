@@ -12,9 +12,9 @@ from PIL import Image, ImageFont, ImageDraw
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QLineEdit,
-    QListWidget, QSlider, QPushButton, QToolButton,
+    QListWidget, QListWidgetItem, QSlider, QPushButton, QToolButton,
     QHBoxLayout, QVBoxLayout, QGridLayout, QFrame, QFileDialog,
-    QColorDialog, QMessageBox, QDialog
+    QColorDialog, QMessageBox, QDialog, QDialogButtonBox
 )
 from PyQt6.QtGui import QIcon, QPixmap, QImage, QFont, QAction, QColor, QCursor, QFontDatabase
 from PyQt6.QtCore import Qt, QSize
@@ -487,6 +487,10 @@ class WatermarkerApp(QMainWindow):
         self.image_display_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(self.image_display_label, 1)
 
+        # Status Bar
+        self.status_bar = self.statusBar()
+        self.status_bar.showMessage("Listo")
+
     def update_color_swatch_style(self):
         """Updates the color swatch background and border."""
         self.color_swatch.setStyleSheet(
@@ -586,18 +590,33 @@ class WatermarkerApp(QMainWindow):
 
     def save_image(self):
         """Guarda la imagen con marca de agua en la ruta seleccionada por el usuario."""
-        file_path, _ = QFileDialog.getSaveFileName(
+        file_path, selected_filter = QFileDialog.getSaveFileName(
             self,
             "Guardar Imagen",
             os.path.join(self.save_dir, "marcadeagua.png"),
-            "Imagen PNG (*.png);;Todos los Archivos (*)"
+            "Imagen PNG (*.png);;Imagen JPEG (*.jpg);;Todos los Archivos (*)"
         )
         if file_path:
             temp_out = os.path.join(TMP_DIR, 'out.png')
             if os.path.exists(temp_out):
-                shutil.copy(temp_out, file_path)
-                self.save_dir = os.path.dirname(file_path)
-                QMessageBox.information(self, "Info", "Imagen guardada exitosamente")
+                try:
+                    img = Image.open(temp_out)
+                    
+                    # Si es JPEG, convertir a RGB (sin transparencia)
+                    if file_path.lower().endswith(('.jpg', '.jpeg')):
+                        if img.mode == 'RGBA':
+                            # Crear fondo blanco
+                            background = Image.new('RGB', img.size, (255, 255, 255))
+                            background.paste(img, mask=img.split()[3])
+                            img = background
+                        else:
+                            img = img.convert('RGB')
+                    
+                    img.save(file_path)
+                    self.save_dir = os.path.dirname(file_path)
+                    QMessageBox.information(self, "Info", "Imagen guardada exitosamente")
+                except Exception as e:
+                    QMessageBox.critical(self, "Error", f"No se pudo guardar la imagen: {str(e)}")
             else:
                 QMessageBox.critical(self, "Error", "No se pudo encontrar la imagen con marca de agua.")
 
@@ -618,6 +637,12 @@ class WatermarkerApp(QMainWindow):
 
         try:
             base_image = Image.open(self.display_image_path).convert("RGBA")
+            # Update status bar with image info
+            img_width, img_height = base_image.size
+            file_name = os.path.basename(self.display_image_path)
+            file_size = os.path.getsize(self.display_image_path)
+            size_str = f"{file_size / 1024:.1f} KB" if file_size < 1024 * 1024 else f"{file_size / (1024 * 1024):.1f} MB"
+            self.status_bar.showMessage(f"{file_name} | {img_width}x{img_height} px | {size_str}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al abrir la imagen:\n{e}")
             return
