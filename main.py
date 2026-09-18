@@ -312,6 +312,19 @@ class WatermarkerApp(QMainWindow):
         self.dark_mode_action.triggered.connect(self.toggle_dark_mode)
         view_menu.addAction(self.dark_mode_action)
 
+        # Menú Presets
+        presets_menu = menu_bar.addMenu("Presets")
+        
+        save_preset_action = QAction("Guardar Preset", self)
+        save_preset_action.setShortcut("Ctrl+Shift+S")
+        save_preset_action.triggered.connect(self.save_preset)
+        presets_menu.addAction(save_preset_action)
+        
+        load_preset_action = QAction("Cargar Preset", self)
+        load_preset_action.setShortcut("Ctrl+Shift+O")
+        load_preset_action.triggered.connect(self.load_preset)
+        presets_menu.addAction(load_preset_action)
+
         # Menú Ayuda
         help_menu = menu_bar.addMenu("Ayuda")
         help_icon = QIcon(os.path.join(RESOURCES_DIR, 'icons', 'help.svg'))
@@ -480,6 +493,12 @@ class WatermarkerApp(QMainWindow):
         controls_layout.addWidget(color_lbl, 5, 0, Qt.AlignmentFlag.AlignRight)
         controls_layout.addWidget(color_container, 5, 1, Qt.AlignmentFlag.AlignLeft)
 
+        # 7. Tiled Mode Checkbox
+        from PyQt6.QtWidgets import QCheckBox
+        self.tiled_checkbox = QCheckBox("Marca de agua repetida (tiled)")
+        self.tiled_checkbox.stateChanged.connect(self.on_tiled_changed)
+        controls_layout.addWidget(self.tiled_checkbox, 6, 0, 1, 2, Qt.AlignmentFlag.AlignLeft)
+
         main_layout.addWidget(controls_widget, 0, Qt.AlignmentFlag.AlignTop)
 
         # Image Display Area (Right)
@@ -504,6 +523,10 @@ class WatermarkerApp(QMainWindow):
             self.setStyleSheet(self.DARK_STYLE)
         else:
             self.setStyleSheet(self.LIGHT_STYLE)
+
+    def on_tiled_changed(self, state):
+        """Maneja el cambio del checkbox de modo tiled."""
+        self.refresh()
 
     def on_text_changed(self, text):
         self.refresh()
@@ -620,6 +643,92 @@ class WatermarkerApp(QMainWindow):
             else:
                 QMessageBox.critical(self, "Error", "No se pudo encontrar la imagen con marca de agua.")
 
+    def save_preset(self):
+        """Guarda la configuración actual como un preset."""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Guardar Preset",
+            os.path.join(CONFIG_DIR, "preset.xml"),
+            "Archivos de Preset (*.xml);;Todos los Archivos (*)"
+        )
+        if file_path:
+            try:
+                root = ET.Element('preset')
+                ET.SubElement(root, 'text').text = self.text_entry.text()
+                ET.SubElement(root, 'font_name').text = self.font_selected[0] if self.font_selected else ''
+                ET.SubElement(root, 'font_size').text = str(self.size_slider.value())
+                ET.SubElement(root, 'transparency').text = str(self.transp_slider.value())
+                ET.SubElement(root, 'angle').text = str(self.angle_slider.value())
+                tc = ET.SubElement(root, 'text_color')
+                tc.set('r', str(self.text_color[0]))
+                tc.set('g', str(self.text_color[1]))
+                tc.set('b', str(self.text_color[2]))
+                ET.SubElement(root, 'color_hex').text = self.color_hex
+                ET.SubElement(root, 'tiled').text = str(self.tiled_checkbox.isChecked()).lower()
+                tree = ET.ElementTree(root)
+                ET.indent(tree, space='  ')
+                tree.write(file_path, encoding='utf-8', xml_declaration=True)
+                QMessageBox.information(self, "Info", "Preset guardado exitosamente")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"No se pudo guardar el preset: {str(e)}")
+
+    def load_preset(self):
+        """Carga un preset desde un archivo."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Cargar Preset",
+            CONFIG_DIR,
+            "Archivos de Preset (*.xml);;Todos los Archivos (*)"
+        )
+        if file_path:
+            try:
+                tree = ET.parse(file_path)
+                root = tree.getroot()
+                
+                text = root.findtext('text')
+                if text is not None:
+                    self.text_entry.setText(text)
+                
+                font_name = root.findtext('font_name')
+                if font_name and self.fonts:
+                    for i, font_item in enumerate(self.fonts):
+                        if font_item[0].lower() == font_name.lower():
+                            self.font_selected = self.fonts[i]
+                            self.font_button.setText(font_name)
+                            break
+                
+                font_size = root.findtext('font_size')
+                if font_size is not None:
+                    self.size_slider.setValue(int(font_size))
+                
+                transparency = root.findtext('transparency')
+                if transparency is not None:
+                    self.transp_slider.setValue(int(transparency))
+                
+                angle = root.findtext('angle')
+                if angle is not None:
+                    self.angle_slider.setValue(int(angle))
+                
+                tc = root.find('text_color')
+                if tc is not None and tc.get('r') is not None:
+                    self.text_color = (int(tc.get('r')), int(tc.get('g')), int(tc.get('b')))
+                    self.update_color_swatch_style()
+                
+                color_hex = root.findtext('color_hex')
+                if color_hex is not None:
+                    self.color_hex = color_hex
+                    self.color_hex_btn.setText(color_hex)
+                    self.update_color_swatch_style()
+                
+                tiled = root.findtext('tiled')
+                if tiled is not None:
+                    self.tiled_checkbox.setChecked(tiled.lower() == 'true')
+                
+                self.refresh()
+                QMessageBox.information(self, "Info", "Preset cargado exitosamente")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"No se pudo cargar el preset: {str(e)}")
+
     def show_about(self):
         """Muestra el diálogo modal Acerca de."""
         dialog = AboutDialog(self)
@@ -682,16 +791,27 @@ class WatermarkerApp(QMainWindow):
             bbox = draw.textbbox((0, 0), text, font=font_obj)
             text_width = bbox[2] - bbox[0]
             text_height = bbox[3] - bbox[1]
-            x = (width - text_width) / 2 - bbox[0]
-            y = (height - text_height) / 2 - bbox[1]
-
+            
             fill_color = (
                 self.text_color[0],
                 self.text_color[1],
                 self.text_color[2],
                 self.transp_slider.value()
             )
-            draw.text((x, y), text, fill=fill_color, font=font_obj)
+            
+            if self.tiled_checkbox.isChecked():
+                # Tiled mode: repeat watermark across the image
+                spacing_x = text_width + 100
+                spacing_y = text_height + 100
+                
+                for y_pos in range(-height, height * 2, spacing_y):
+                    for x_pos in range(-width, width * 2, spacing_x):
+                        draw.text((x_pos, y_pos), text, fill=fill_color, font=font_obj)
+            else:
+                # Single watermark mode
+                x = (width - text_width) / 2 - bbox[0]
+                y = (height - text_height) / 2 - bbox[1]
+                draw.text((x, y), text, fill=fill_color, font=font_obj)
 
         rotated_text_layer = text_layer.rotate(self.angle_slider.value())
 
@@ -730,6 +850,7 @@ class WatermarkerApp(QMainWindow):
         ET.SubElement(settings, 'color_rgb').text = ','.join(map(str, self.text_color))
         ET.SubElement(settings, 'color_hex').text = self.color_hex
         ET.SubElement(settings, 'dark_mode').text = str(self.dark_mode).lower()
+        ET.SubElement(settings, 'tiled').text = str(self.tiled_checkbox.isChecked()).lower()
 
         paths = ET.SubElement(root, 'paths')
         ET.SubElement(paths, 'last_image').text = self.display_image_path
@@ -816,6 +937,10 @@ class WatermarkerApp(QMainWindow):
                 self.dark_mode = dark_mode_elem.text.lower() == 'true'
                 if self.dark_mode:
                     self.setStyleSheet(self.DARK_STYLE)
+
+            tiled_elem = settings.find('tiled')
+            if tiled_elem is not None and tiled_elem.text:
+                self.tiled_checkbox.setChecked(tiled_elem.text.lower() == 'true')
 
         paths = root.find('paths')
         if paths is not None:
