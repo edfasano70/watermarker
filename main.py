@@ -30,7 +30,7 @@ CONFIG_DIR = os.path.join(os.path.expanduser('~'), '.config', 'watermarker')
 CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.xml')
 os.makedirs(CONFIG_DIR, exist_ok=True)
 PROGRAM_NAME = 'WaterMarker'
-PROGRAM_VERSION = '1.2.0'
+PROGRAM_VERSION = '1.3.0'
 PROGRAM_DESCRIPTION = 'Aplica marcas de agua de texto\nde forma sencilla\n\nPrograma por @edfasano70'
 
 
