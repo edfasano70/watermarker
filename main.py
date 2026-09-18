@@ -315,12 +315,14 @@ class WatermarkerApp(QMainWindow):
         # Menú Presets
         presets_menu = menu_bar.addMenu("Presets")
         
-        save_preset_action = QAction("Guardar Preset", self)
+        save_preset_icon = QIcon(os.path.join(RESOURCES_DIR, 'icons', 'save_preset.svg'))
+        save_preset_action = QAction(save_preset_icon, "Guardar Preset", self)
         save_preset_action.setShortcut("Ctrl+Shift+S")
         save_preset_action.triggered.connect(self.save_preset)
         presets_menu.addAction(save_preset_action)
         
-        load_preset_action = QAction("Cargar Preset", self)
+        load_preset_icon = QIcon(os.path.join(RESOURCES_DIR, 'icons', 'load_preset.svg'))
+        load_preset_action = QAction(load_preset_icon, "Cargar Preset", self)
         load_preset_action.setShortcut("Ctrl+Shift+O")
         load_preset_action.triggered.connect(self.load_preset)
         presets_menu.addAction(load_preset_action)
