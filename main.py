@@ -764,7 +764,8 @@ class WatermarkerApp(QMainWindow):
             base_image.thumbnail((600, 600))
             width, height = base_image.size
 
-        text_layer = Image.new('RGBA', base_image.size, (255, 255, 255, 0))
+        # Create text_layer at double size to avoid clipping on rotation
+        text_layer = Image.new('RGBA', (width * 2, height * 2), (255, 255, 255, 0))
 
         font_size = self.size_slider.value()
         font_name = self.font_selected[0] if self.font_selected else None
@@ -802,20 +803,27 @@ class WatermarkerApp(QMainWindow):
             )
             
             if self.tiled_checkbox.isChecked():
-                # Tiled mode: repeat watermark across the image
+                # Tiled mode: repeat watermark across the double-sized canvas
                 spacing_x = text_width + 100
                 spacing_y = text_height + 100
                 
-                for y_pos in range(-height, height * 2, spacing_y):
-                    for x_pos in range(-width, width * 2, spacing_x):
+                for y_pos in range(-height, height * 3, spacing_y):
+                    for x_pos in range(-width, width * 3, spacing_x):
                         draw.text((x_pos, y_pos), text, fill=fill_color, font=font_obj)
             else:
-                # Single watermark mode
-                x = (width - text_width) / 2 - bbox[0]
-                y = (height - text_height) / 2 - bbox[1]
+                # Single watermark mode - center in double-sized canvas
+                x = width - text_width / 2 - bbox[0]
+                y = height - text_height / 2 - bbox[1]
                 draw.text((x, y), text, fill=fill_color, font=font_obj)
 
         rotated_text_layer = text_layer.rotate(self.angle_slider.value())
+
+        # Crop rotated layer back to original image size (center crop)
+        left = width // 2
+        top = height // 2
+        right = left + width
+        bottom = top + height
+        rotated_text_layer = rotated_text_layer.crop((left, top, right, bottom))
 
         # Alpha composite and save out.png
         watermarked = Image.alpha_composite(base_image, rotated_text_layer)
