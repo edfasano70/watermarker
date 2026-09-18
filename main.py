@@ -6,9 +6,9 @@ Una aplicación de escritorio moderna para aplicar marcas de agua de texto a im�
 import sys
 import os
 import shutil
+import subprocess
 import xml.etree.ElementTree as ET
 from PIL import Image, ImageFont, ImageDraw
-import matplotlib.font_manager as fm
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QLineEdit,
@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QVBoxLayout, QGridLayout, QFrame, QFileDialog,
     QColorDialog, QMessageBox, QDialog
 )
-from PyQt6.QtGui import QIcon, QPixmap, QImage, QFont, QAction, QColor, QCursor
+from PyQt6.QtGui import QIcon, QPixmap, QImage, QFont, QAction, QColor, QCursor, QFontDatabase
 from PyQt6.QtCore import Qt, QSize
 
 # **** PATHS & CONSTANTS
@@ -136,6 +136,90 @@ class HelpDialog(QDialog):
         layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
 
+class FontSelectionDialog(QDialog):
+    def __init__(self, current_font='', parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('Seleccionar fuente')
+        self.setModal(True)
+        self.setMinimumSize(500, 500)
+        self.selected_font = current_font
+        self._build_font_ui()
+
+    def _build_font_ui(self):
+        layout = QVBoxLayout(self)
+
+        filter_layout = QHBoxLayout()
+        filter_layout.addWidget(QLabel('Buscar:'))
+        self.filter_input = QLineEdit()
+        self.filter_input.setPlaceholderText('Escriba para filtrar...')
+        self.filter_input.textChanged.connect(self._filter_fonts)
+        filter_layout.addWidget(self.filter_input)
+        layout.addLayout(filter_layout)
+
+        self.preview_label = QLabel('Vista previa')
+        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview_label.setMinimumHeight(60)
+        self.preview_label.setStyleSheet('border: 1px solid gray; padding: 10px; font-size: 24px;')
+        layout.addWidget(self.preview_label)
+
+        self.font_list = QListWidget()
+        self.font_list.setAlternatingRowColors(True)
+        self.font_list.setSpacing(2)
+        self.font_list.currentItemChanged.connect(self._on_font_changed)
+        
+        fonts = QFontDatabase.families()
+        self.font_data = {}
+        for fname in fonts:
+            item = QListWidgetItem(fname)
+            try:
+                qf = QFont(fname)
+                qf.setPointSize(14)
+                item.setFont(qf)
+            except Exception:
+                pass
+            self.font_list.addItem(item)
+            self.font_data[fname] = fname
+
+        for i in range(self.font_list.count()):
+            if self.font_list.item(i).text() == self.selected_font:
+                self.font_list.setCurrentRow(i)
+                break
+
+        layout.addWidget(self.font_list)
+
+        btn_layout = QHBoxLayout()
+        btn_ok = QPushButton('Aceptar')
+        btn_cancel = QPushButton('Cancelar')
+        btn_ok.clicked.connect(self._accept)
+        btn_cancel.clicked.connect(self.reject)
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn_ok)
+        btn_layout.addWidget(btn_cancel)
+        layout.addLayout(btn_layout)
+
+    def _filter_fonts(self, text):
+        text_lower = text.lower()
+        for i in range(self.font_list.count()):
+            item = self.font_list.item(i)
+            item.setHidden(text_lower not in item.text().lower())
+
+    def _on_font_changed(self, current, _prev):
+        if current:
+            fname = current.text()
+            try:
+                self.preview_label.setFont(QFont(fname, 24))
+            except Exception:
+                self.preview_label.setFont(QFont('serif', 24))
+            self.selected_font = fname
+
+    def _accept(self):
+        self.hide()
+        self.done(QDialog.DialogCode.Accepted)
+
+    def get_selected_font(self):
+        return self.selected_font
+
+
 class WatermarkerApp(QMainWindow):
     """Ventana principal de la aplicación usando PyQt6."""
 
@@ -178,13 +262,11 @@ class WatermarkerApp(QMainWindow):
         self.center_window()
 
     def init_fonts(self):
-        """Discovers system TTF fonts."""
-        system_fonts = fm.findSystemFonts(fontpaths=None, fontext='ttf')
+        """Discovers system fonts using QFontDatabase."""
+        fonts = QFontDatabase.families()
         self.fonts = []
-        for font_path in system_fonts:
-            if '.ttf' in font_path.lower():
-                font_name = os.path.splitext(os.path.basename(font_path))[0].capitalize()
-                self.fonts.append((font_name, font_path))
+        for font_name in fonts:
+            self.fonts.append((font_name, font_name))
 
         self.fonts.sort(key=lambda x: x[0])
         if not self.fonts:
@@ -264,16 +346,12 @@ class WatermarkerApp(QMainWindow):
         controls_layout.addWidget(text_lbl, 0, 0, Qt.AlignmentFlag.AlignRight)
         controls_layout.addWidget(self.text_entry, 0, 1)
 
-        # 2. Font List
+        # 2. Font Selection Button
         font_lbl = QLabel("Fuente")
-        self.font_list = QListWidget()
-        self.font_list.setFixedHeight(110)
-        for font_name, _ in self.fonts:
-            self.font_list.addItem(font_name)
-        self.font_list.setCurrentRow(0)
-        self.font_list.currentRowChanged.connect(self.on_font_changed)
-        controls_layout.addWidget(font_lbl, 1, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
-        controls_layout.addWidget(self.font_list, 1, 1)
+        self.font_button = QPushButton(self.font_selected[0] if self.font_selected else "Seleccionar fuente")
+        self.font_button.clicked.connect(self.open_font_dialog)
+        controls_layout.addWidget(font_lbl, 1, 0, Qt.AlignmentFlag.AlignRight)
+        controls_layout.addWidget(self.font_button, 1, 1)
 
         # Icons
         minus_icon_path = os.path.join(RESOURCES_DIR, 'icon_minus.png')
@@ -426,6 +504,17 @@ class WatermarkerApp(QMainWindow):
     def on_text_changed(self, text):
         self.refresh()
 
+    def open_font_dialog(self):
+        dlg = FontSelectionDialog(current_font=self.font_selected[0], parent=self)
+        if dlg.exec():
+            font_name = dlg.get_selected_font()
+            for i, font_item in enumerate(self.fonts):
+                if font_item[0].lower() == font_name.lower():
+                    self.font_selected = self.fonts[i]
+                    self.font_button.setText(font_name)
+                    self.refresh()
+                    break
+
     def on_font_changed(self, index):
         if 0 <= index < len(self.fonts):
             self.font_selected = self.fonts[index]
@@ -542,9 +631,19 @@ class WatermarkerApp(QMainWindow):
         text_layer = Image.new('RGBA', base_image.size, (255, 255, 255, 0))
 
         font_size = self.size_slider.value()
-        if self.font_selected and self.font_selected[1] and os.path.exists(self.font_selected[1]):
+        font_name = self.font_selected[0] if self.font_selected else None
+        if font_name:
             try:
-                font_obj = ImageFont.truetype(self.font_selected[1], font_size)
+                # Try to find the font file using fc-match
+                result = subprocess.run(
+                    ['fc-match', '-f', '%{file}', font_name],
+                    capture_output=True, text=True, timeout=5
+                )
+                font_path = result.stdout.strip()
+                if font_path and os.path.isfile(font_path):
+                    font_obj = ImageFont.truetype(font_path, font_size)
+                else:
+                    font_obj = ImageFont.load_default()
             except Exception:
                 font_obj = ImageFont.load_default()
         else:
@@ -683,8 +782,8 @@ class WatermarkerApp(QMainWindow):
                 font_name_to_load = font_name_elem.text
                 for i, font_item in enumerate(self.fonts):
                     if font_item[0].lower() == font_name_to_load.lower():
-                        self.font_list.setCurrentRow(i)
                         self.font_selected = self.fonts[i]
+                        self.font_button.setText(font_name_to_load)
                         break
 
             dark_mode_elem = settings.find('dark_mode')
