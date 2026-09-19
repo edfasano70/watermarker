@@ -14,7 +14,8 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QLineEdit,
     QListWidget, QListWidgetItem, QSlider, QPushButton, QToolButton,
     QHBoxLayout, QVBoxLayout, QGridLayout, QFrame, QFileDialog,
-    QColorDialog, QMessageBox, QDialog, QDialogButtonBox
+    QColorDialog, QMessageBox, QDialog, QDialogButtonBox,
+    QComboBox, QSpinBox
 )
 from PyQt6.QtGui import QIcon, QPixmap, QImage, QFont, QAction, QColor, QCursor, QFontDatabase
 from PyQt6.QtCore import Qt, QSize
@@ -35,65 +36,121 @@ PROGRAM_DESCRIPTION = 'Aplica marcas de agua de texto\nde forma sencilla\n\nProg
 
 
 class AboutDialog(QDialog):
-    """Diálogo modal que muestra información de la aplicación."""
-
-    def __init__(self, parent=None):
+    """Diálogo 'Acerca de' reutilizable con soporte de temas."""
+    
+    _instance = None
+    
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
+    def __init__(self, parent=None, dark_mode=False, resources_dir=None):
+        # Reinicializar si ya se cerró (singleton que resetea)
+        if hasattr(self, '_initialized') and self._initialized:
+            self._update_theme(dark_mode)
+            return
+        self._initialized = True
+        
         super().__init__(parent)
+        self.dark_mode = dark_mode
+        self.resources_dir = resources_dir or "."
         self.setWindowTitle("Acerca de")
         self.setFixedSize(300, 320)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
-        self.setStyleSheet("""
-            QDialog { border: none; }
-            QLabel { border: none; background: transparent; }
-        """)
-
-        logo_path = os.path.join(RESOURCES_DIR, 'logo.png')
+        
+        # Logo (con fallback si resources_dir no existe)
+        logo_path = os.path.join(self.resources_dir, 'logo.png')
         if os.path.exists(logo_path):
             self.setWindowIcon(QIcon(logo_path))
-
+        
+        self._build_ui()
+        self._apply_theme()
+    
+    def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.setContentsMargins(15, 15, 15, 15)
-
-        # Splash image
-        splash_path = os.path.join(RESOURCES_DIR, 'splash.png')
+        
+        # Splash (opcional)
+        splash_path = os.path.join(self.resources_dir, 'splash.png')
         if os.path.exists(splash_path):
             splash_label = QLabel()
             pixmap = QPixmap(splash_path)
-            splash_label.setPixmap(pixmap.scaled(120, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            splash_label.setPixmap(pixmap.scaled(120, 120, 
+                Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
             splash_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(splash_label)
-
-        # Program Name
-        name_label = QLabel(PROGRAM_NAME)
-        name_font = QFont("Arial", 14, QFont.Weight.Bold)
-        name_label.setFont(name_font)
+        
+        # Nombre
+        name_label = QLabel("WaterMarker")
+        name_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(name_label)
-
-        # Version
-        version_label = QLabel(f"v{PROGRAM_VERSION}")
-        version_font = QFont("Arial", 10, QFont.Weight.Bold)
-        version_label.setFont(version_font)
+        
+        # Versión
+        version_label = QLabel("v1.4.2")
+        version_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(version_label)
-
-        # Description
-        desc_label = QLabel(PROGRAM_DESCRIPTION)
-        desc_font = QFont("Arial", 9)
-        desc_label.setFont(desc_font)
+        
+        # Descripción
+        desc_label = QLabel("Aplica marcas de agua de texto\nde forma sencilla\n\nPrograma por @edfasano70")
+        desc_label.setFont(QFont("Arial", 9))
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        desc_label.setWordWrap(True)
         layout.addWidget(desc_label)
-
+        
         layout.addSpacing(10)
-
-        # Close button
+        
+        # Botón cerrar
         close_btn = QPushButton("Cerrar")
         close_btn.setFixedWidth(90)
-        close_btn.clicked.connect(self.accept)
+        close_btn.clicked.connect(self._on_close)
         layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+    
+    def _on_close(self):
+        # Reset singleton al cerrar para permitir reinicialización
+        self._initialized = False
+        AboutDialog._instance = None
+        self.accept()
+    
+    def _apply_theme(self):
+        self.setStyleSheet(self._get_stylesheet())
+    
+    def _get_stylesheet(self):
+        if self.dark_mode:
+            return DARK_STYLE
+        return LIGHT_STYLE
+    
+    def set_dark_mode(self, enabled: bool):
+        if self.dark_mode != enabled:
+            self.dark_mode = enabled
+            self._apply_theme()
+    
+    def _update_theme(self, dark_mode):
+        """Actualiza tema sin reinicializar UI."""
+        if self.dark_mode != dark_mode:
+            self.dark_mode = dark_mode
+            self._apply_theme()
 
 
+# Estilos QSS para tema claro/oscuro
+DARK_STYLE = """
+    QDialog { background-color: #1e1e1e; border: none; }
+    QLabel { color: #e0e0e0; border: none; background: transparent; }
+    QPushButton { background-color: #3d3d3d; border: 1px solid #555; 
+        border-radius: 3px; padding: 4px 8px; color: #e0e0e0; }
+    QPushButton:hover { background-color: #4d4d4d; }
+"""
+
+LIGHT_STYLE = """
+    QDialog { background-color: #ffffff; border: none; }
+    QLabel { color: #000000; border: none; background: transparent; }
+    QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; 
+        border-radius: 3px; padding: 4px 8px; color: #000000; }
+    QPushButton:hover { background-color: #e0e0e0; }
+"""
 class HelpDialog(QDialog):
     """Diálogo modal que muestra ayuda e instrucciones de la aplicación."""
 
@@ -496,10 +553,62 @@ class WatermarkerApp(QMainWindow):
         controls_layout.addWidget(color_container, 5, 1, Qt.AlignmentFlag.AlignLeft)
 
         # 7. Tiled Mode Checkbox
-        from PyQt6.QtWidgets import QCheckBox
         self.tiled_checkbox = QCheckBox("Marca de agua repetida (tiled)")
         self.tiled_checkbox.stateChanged.connect(self.on_tiled_changed)
         controls_layout.addWidget(self.tiled_checkbox, 6, 0, 1, 2, Qt.AlignmentFlag.AlignLeft)
+
+        # 8. Text Effect (Shadow/Border)
+        effect_lbl = QLabel("Efecto texto")
+        effect_container = QWidget()
+        effect_layout = QHBoxLayout(effect_container)
+        effect_layout.setContentsMargins(0, 0, 0, 0)
+        effect_layout.setSpacing(6)
+
+        self.effect_combo = QComboBox()
+        self.effect_combo.addItems(["Ninguno", "Sombra", "Borde"])
+        self.effect_combo.currentIndexChanged.connect(self.on_effect_changed)
+        effect_layout.addWidget(self.effect_combo)
+
+        # Shadow controls (hidden by default)
+        self.shadow_offset_x_lbl = QLabel("X:")
+        self.shadow_offset_x_spin = QSpinBox()
+        self.shadow_offset_x_spin.setRange(-20, 20)
+        self.shadow_offset_x_spin.setValue(3)
+        self.shadow_offset_x_spin.valueChanged.connect(self.on_shadow_changed)
+        effect_layout.addWidget(self.shadow_offset_x_lbl)
+        effect_layout.addWidget(self.shadow_offset_x_spin)
+
+        self.shadow_offset_y_lbl = QLabel("Y:")
+        self.shadow_offset_y_spin = QSpinBox()
+        self.shadow_offset_y_spin.setRange(-20, 20)
+        self.shadow_offset_y_spin.setValue(3)
+        self.shadow_offset_y_spin.valueChanged.connect(self.on_shadow_changed)
+        effect_layout.addWidget(self.shadow_offset_y_lbl)
+        effect_layout.addWidget(self.shadow_offset_y_spin)
+
+        self.shadow_blur_lbl = QLabel("Blur:")
+        self.shadow_blur_spin = QSpinBox()
+        self.shadow_blur_spin.setRange(0, 20)
+        self.shadow_blur_spin.setValue(4)
+        self.shadow_blur_spin.valueChanged.connect(self.on_shadow_changed)
+        effect_layout.addWidget(self.shadow_blur_lbl)
+        effect_layout.addWidget(self.shadow_blur_spin)
+
+        # Border controls (hidden by default)
+        self.border_width_lbl = QLabel("Ancho:")
+        self.border_width_spin = QSpinBox()
+        self.border_width_spin.setRange(1, 10)
+        self.border_width_spin.setValue(2)
+        self.border_width_spin.valueChanged.connect(self.on_border_changed)
+        effect_layout.addWidget(self.border_width_lbl)
+        effect_layout.addWidget(self.border_width_spin)
+
+        effect_layout.addStretch()
+        controls_layout.addWidget(effect_lbl, 7, 0, Qt.AlignmentFlag.AlignRight)
+        controls_layout.addWidget(effect_container, 7, 1, Qt.AlignmentFlag.AlignLeft)
+
+        # Initially hide shadow/border controls
+        self._update_effect_controls_visibility()
 
         main_layout.addWidget(controls_widget, 0, Qt.AlignmentFlag.AlignTop)
 
@@ -525,10 +634,42 @@ class WatermarkerApp(QMainWindow):
             self.setStyleSheet(self.DARK_STYLE)
         else:
             self.setStyleSheet(self.LIGHT_STYLE)
+        # Notificar diálogo AboutDialog abierto
+        if AboutDialog._instance and getattr(AboutDialog._instance, '_initialized', False):
+            AboutDialog._instance.set_dark_mode(self.dark_mode)
 
     def on_tiled_changed(self, state):
         """Maneja el cambio del checkbox de modo tiled."""
         self.refresh()
+
+    def on_effect_changed(self, index):
+        """Maneja el cambio del tipo de efecto."""
+        self._update_effect_controls_visibility()
+        self.refresh()
+
+    def on_shadow_changed(self, value):
+        """Maneja el cambio de parámetros de sombra."""
+        self.refresh()
+
+    def on_border_changed(self, value):
+        """Maneja el cambio de parámetros de borde."""
+        self.refresh()
+
+    def _update_effect_controls_visibility(self):
+        """Muestra/oculta controles según el efecto seleccionado."""
+        effect = self.effect_combo.currentText()
+        show_shadow = effect == "Sombra"
+        show_border = effect == "Borde"
+        
+        self.shadow_offset_x_lbl.setVisible(show_shadow)
+        self.shadow_offset_x_spin.setVisible(show_shadow)
+        self.shadow_offset_y_lbl.setVisible(show_shadow)
+        self.shadow_offset_y_spin.setVisible(show_shadow)
+        self.shadow_blur_lbl.setVisible(show_shadow)
+        self.shadow_blur_spin.setVisible(show_shadow)
+        
+        self.border_width_lbl.setVisible(show_border)
+        self.border_width_spin.setVisible(show_border)
 
     def on_text_changed(self, text):
         self.refresh()
@@ -733,7 +874,7 @@ class WatermarkerApp(QMainWindow):
 
     def show_about(self):
         """Muestra el diálogo modal Acerca de."""
-        dialog = AboutDialog(self)
+        dialog = AboutDialog(self, dark_mode=self.dark_mode, resources_dir=RESOURCES_DIR)
         dialog.exec()
 
     def show_help(self):
@@ -802,6 +943,39 @@ class WatermarkerApp(QMainWindow):
                 self.transp_slider.value()
             )
             
+            effect_type = self.effect_combo.currentText()
+            
+            def draw_text_with_effect(x, y):
+                """Dibuja texto con efecto según configuración."""
+                if effect_type == "Sombra":
+                    # Dibujar sombra primero
+                    shadow_color = (0, 0, 0, min(255, self.transp_slider.value()))
+                    shadow_x = self.shadow_offset_x_spin.value()
+                    shadow_y = self.shadow_offset_y_spin.value()
+                    blur_radius = self.shadow_blur_spin.value()
+                    
+                    # Para sombra simple sin blur real, dibujar desplazado
+                    draw.text((x + shadow_x, y + shadow_y), text, fill=shadow_color, font=font_obj)
+                    # Luego dibujar texto principal
+                    draw.text((x, y), text, fill=fill_color, font=font_obj)
+                    
+                elif effect_type == "Borde":
+                    # Dibujar borde dibujando texto en 8 direcciones alrededor
+                    border_color = (0, 0, 0, min(255, self.transp_slider.value()))
+                    border_width = self.border_width_spin.value()
+                    
+                    for dx in range(-border_width, border_width + 1):
+                        for dy in range(-border_width, border_width + 1):
+                            if dx != 0 or dy != 0:
+                                draw.text((x + dx, y + dy), text, fill=border_color, font=font_obj)
+                    
+                    # Luego dibujar texto principal
+                    draw.text((x, y), text, fill=fill_color, font=font_obj)
+                    
+                else:
+                    # Sin efecto
+                    draw.text((x, y), text, fill=fill_color, font=font_obj)
+            
             if self.tiled_checkbox.isChecked():
                 # Tiled mode: repeat watermark across the double-sized canvas
                 spacing_x = text_width + 100
@@ -809,12 +983,12 @@ class WatermarkerApp(QMainWindow):
                 
                 for y_pos in range(-height, height * 3, spacing_y):
                     for x_pos in range(-width, width * 3, spacing_x):
-                        draw.text((x_pos, y_pos), text, fill=fill_color, font=font_obj)
+                        draw_text_with_effect(x_pos, y_pos)
             else:
                 # Single watermark mode - center in double-sized canvas
                 x = width - text_width / 2 - bbox[0]
                 y = height - text_height / 2 - bbox[1]
-                draw.text((x, y), text, fill=fill_color, font=font_obj)
+                draw_text_with_effect(x, y)
 
         rotated_text_layer = text_layer.rotate(self.angle_slider.value())
 
@@ -861,6 +1035,18 @@ class WatermarkerApp(QMainWindow):
         ET.SubElement(settings, 'color_hex').text = self.color_hex
         ET.SubElement(settings, 'dark_mode').text = str(self.dark_mode).lower()
         ET.SubElement(settings, 'tiled').text = str(self.tiled_checkbox.isChecked()).lower()
+        ET.SubElement(settings, 'text_effect').text = self.effect_combo.currentText()
+        ET.SubElement(settings, 'shadow_x').text = str(self.shadow_offset_x_spin.value())
+        ET.SubElement(settings, 'shadow_y').text = str(self.shadow_offset_y_spin.value())
+        ET.SubElement(settings, 'shadow_blur').text = str(self.shadow_blur_spin.value())
+        ET.SubElement(settings, 'border_width').text = str(self.border_width_spin.value())
+
+        # Ventana: posición y tamaño
+        window = ET.SubElement(root, 'window')
+        ET.SubElement(window, 'x').text = str(self.pos().x())
+        ET.SubElement(window, 'y').text = str(self.pos().y())
+        ET.SubElement(window, 'width').text = str(self.width())
+        ET.SubElement(window, 'height').text = str(self.height())
 
         paths = ET.SubElement(root, 'paths')
         ET.SubElement(paths, 'last_image').text = self.display_image_path
@@ -951,6 +1137,40 @@ class WatermarkerApp(QMainWindow):
             tiled_elem = settings.find('tiled')
             if tiled_elem is not None and tiled_elem.text:
                 self.tiled_checkbox.setChecked(tiled_elem.text.lower() == 'true')
+
+            text_effect_elem = settings.find('text_effect')
+            if text_effect_elem is not None and text_effect_elem.text:
+                self.effect_combo.setCurrentText(text_effect_elem.text)
+
+            shadow_x_elem = settings.find('shadow_x')
+            if shadow_x_elem is not None and shadow_x_elem.text:
+                self.shadow_offset_x_spin.setValue(int(shadow_x_elem.text))
+
+            shadow_y_elem = settings.find('shadow_y')
+            if shadow_y_elem is not None and shadow_y_elem.text:
+                self.shadow_offset_y_spin.setValue(int(shadow_y_elem.text))
+
+            shadow_blur_elem = settings.find('shadow_blur')
+            if shadow_blur_elem is not None and shadow_blur_elem.text:
+                self.shadow_blur_spin.setValue(int(shadow_blur_elem.text))
+
+            border_width_elem = settings.find('border_width')
+            if border_width_elem is not None and border_width_elem.text:
+                self.border_width_spin.setValue(int(border_width_elem.text))
+
+            self._update_effect_controls_visibility()
+
+        # Ventana: posición y tamaño
+        window_elem = root.find('window')
+        if window_elem is not None:
+            x_elem = window_elem.find('x')
+            y_elem = window_elem.find('y')
+            w_elem = window_elem.find('width')
+            h_elem = window_elem.find('height')
+            if x_elem is not None and y_elem is not None:
+                self.move(int(x_elem.text), int(y_elem.text))
+            if w_elem is not None and h_elem is not None:
+                self.resize(int(w_elem.text), int(h_elem.text))
 
         paths = root.find('paths')
         if paths is not None:

@@ -17,9 +17,9 @@
 - [ ] Agregar atajos de teclado para Undo/Redo
 - [ ] Agregar preview en tiempo real más grande (configurable)
 - [ ] Agregar opción de centrar automáticamente la marca de agua
-- [ ] Agregar opción de sombra o borde al texto
+- [x] Agregar opción de sombra o borde al texto
 - [ ] Crear icono SVG personalizado para la aplicación
 - [ ] Agregar soporte para Wayland nativo
 
 ## Siguientes Pasos
-- [ ] Hacer persistente la ubicación de la ventana
+- [x] Hacer persistente la ubicación de la ventana
