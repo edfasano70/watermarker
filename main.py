@@ -131,7 +131,7 @@ class AboutDialog(QDialog):
         layout.addWidget(name_label)
         
         # Versión
-        version_label = QLabel("v1.4.2")
+        version_label = QLabel(f"v{PROGRAM_VERSION}")
         version_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(version_label)
