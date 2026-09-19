@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QSlider, QPushButton, QToolButton,
     QHBoxLayout, QVBoxLayout, QGridLayout, QFrame, QFileDialog,
     QColorDialog, QMessageBox, QDialog, QDialogButtonBox,
-    QComboBox, QSpinBox
+    QComboBox, QSpinBox, QCheckBox, QProgressBar
 )
 from PyQt6.QtGui import QIcon, QPixmap, QImage, QFont, QAction, QColor, QCursor, QFontDatabase
 from PyQt6.QtCore import Qt, QSize
@@ -31,27 +31,14 @@ CONFIG_DIR = os.path.join(os.path.expanduser('~'), '.config', 'watermarker')
 CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.xml')
 os.makedirs(CONFIG_DIR, exist_ok=True)
 PROGRAM_NAME = 'WaterMarker'
-PROGRAM_VERSION = '1.4.2'
+PROGRAM_VERSION = '1.4.5'
 PROGRAM_DESCRIPTION = 'Aplica marcas de agua de texto\nde forma sencilla\n\nPrograma por @edfasano70'
 
 
 class AboutDialog(QDialog):
     """Diálogo 'Acerca de' reutilizable con soporte de temas."""
     
-    _instance = None
-    
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-    
     def __init__(self, parent=None, dark_mode=False, resources_dir=None):
-        # Reinicializar si ya se cerró (singleton que resetea)
-        if hasattr(self, '_initialized') and self._initialized:
-            self._update_theme(dark_mode)
-            return
-        self._initialized = True
-        
         super().__init__(parent)
         self.dark_mode = dark_mode
         self.resources_dir = resources_dir or "."
@@ -66,6 +53,61 @@ class AboutDialog(QDialog):
         
         self._build_ui()
         self._apply_theme()
+    
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Splash (opcional)
+        splash_path = os.path.join(self.resources_dir, 'splash.png')
+        if os.path.exists(splash_path):
+            splash_label = QLabel()
+            pixmap = QPixmap(splash_path)
+            splash_label.setPixmap(pixmap.scaled(120, 120, 
+                Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            splash_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(splash_label)
+        
+        # Nombre
+        name_label = QLabel(PROGRAM_NAME)
+        name_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(name_label)
+        
+        # Versión
+        version_label = QLabel(f"v{PROGRAM_VERSION}")
+        version_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(version_label)
+        
+        # Descripción
+        desc_label = QLabel(PROGRAM_DESCRIPTION)
+        desc_label.setFont(QFont("Arial", 9))
+        desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        desc_label.setWordWrap(True)
+        layout.addWidget(desc_label)
+        
+        layout.addSpacing(10)
+        
+        # Botón cerrar
+        close_btn = QPushButton("Cerrar")
+        close_btn.setFixedWidth(90)
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+    
+    def _apply_theme(self):
+        self.setStyleSheet(self._get_stylesheet())
+    
+    def _get_stylesheet(self):
+        if self.dark_mode:
+            return DARK_STYLE
+        return LIGHT_STYLE
+    
+    def set_dark_mode(self, enabled: bool):
+        if self.dark_mode != enabled:
+            self.dark_mode = enabled
+            self._apply_theme()
     
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -151,6 +193,66 @@ LIGHT_STYLE = """
         border-radius: 3px; padding: 4px 8px; color: #000000; }
     QPushButton:hover { background-color: #e0e0e0; }
 """
+class SplashScreen(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+        self._build_ui()
+        self.adjustSize()
+        self._center_on_screen()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Logo
+        logo_path = os.path.join(RESOURCES_DIR, 'logo.png')
+        if os.path.exists(logo_path):
+            icon_label = QLabel()
+            pixmap = QPixmap(logo_path)
+            icon_label.setPixmap(pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(icon_label)
+
+        name_label = QLabel(PROGRAM_NAME)
+        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        name_label.setStyleSheet('font-size: 24px; font-weight: bold; color: #FF9800;')
+        layout.addWidget(name_label)
+
+        version_label = QLabel(f'v{PROGRAM_VERSION}')
+        version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        version_label.setStyleSheet('font-size: 14px; color: #888;')
+        layout.addWidget(version_label)
+
+        self.message_label = QLabel('Cargando fuentes...')
+        self.message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.message_label.setStyleSheet('font-size: 12px; color: #666; margin-top: 10px;')
+        layout.addWidget(self.message_label)
+
+        self.progress = QProgressBar()
+        self.progress.setTextVisible(False)
+        self.progress.setRange(0, 1)
+        self.progress.setValue(0)
+        self.progress.setFixedWidth(200)
+        layout.addWidget(self.progress)
+
+    def _center_on_screen(self):
+        screen = QApplication.primaryScreen().availableGeometry()
+        x = (screen.width() - self.width()) // 2
+        y = (screen.height() - self.height()) // 2
+        self.move(x, y)
+
+    def set_progress(self, current, total):
+        self.progress.setRange(0, total)
+        self.progress.setValue(current)
+        self.message_label.setText(f'Cargando fuentes... {current}/{total}')
+        QApplication.processEvents()
+
+    def finish(self):
+        self.close()
+
+
 class HelpDialog(QDialog):
     """Diálogo modal que muestra ayuda e instrucciones de la aplicación."""
 
@@ -960,17 +1062,12 @@ class WatermarkerApp(QMainWindow):
                     draw.text((x, y), text, fill=fill_color, font=font_obj)
                     
                 elif effect_type == "Borde":
-                    # Dibujar borde dibujando texto en 8 direcciones alrededor
+                    # Usar stroke_width y stroke_fill de PIL (mucho más rápido)
                     border_color = (0, 0, 0, min(255, self.transp_slider.value()))
                     border_width = self.border_width_spin.value()
                     
-                    for dx in range(-border_width, border_width + 1):
-                        for dy in range(-border_width, border_width + 1):
-                            if dx != 0 or dy != 0:
-                                draw.text((x + dx, y + dy), text, fill=border_color, font=font_obj)
-                    
-                    # Luego dibujar texto principal
-                    draw.text((x, y), text, fill=fill_color, font=font_obj)
+                    draw.text((x, y), text, fill=fill_color, font=font_obj,
+                              stroke_width=border_width, stroke_fill=border_color)
                     
                 else:
                     # Sin efecto
@@ -1198,7 +1295,16 @@ class WatermarkerApp(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
+
+    # Splash screen while loading fonts
+    splash = SplashScreen()
+    splash.show()
+
+    # Load fonts with progress
     window = WatermarkerApp()
+    splash.set_progress(1, 1)
+    splash.finish()
+
     window.show()
     sys.exit(app.exec())
 
