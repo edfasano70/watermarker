@@ -3,6 +3,14 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Build
+build/
+dist/
+*.spec
+
+# Package
+*.deb
+
 # Temporary outputs
 tmp/*
 !tmp/.gitkeep
@@ -15,3 +23,6 @@ backup/
 .vscode/
 .idea/
 *.swp
+
+# Config directories
+~/
