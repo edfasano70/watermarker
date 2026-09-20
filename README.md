@@ -43,7 +43,7 @@ python main.py
 
 ### Paquete .deb (Ubuntu/Debian)
 
-Descargá el `.deb` desde [Releases](https://github.com/edfasano70/watermarker/releases) e instalá:
+Descarga el `.deb` desde [Releases](https://github.com/edfasano70/watermarker/releases) e instala:
 
 ```bash
 sudo dpkg -i watermarker_1.4.5_amd64.deb
