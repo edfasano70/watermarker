@@ -7,12 +7,6 @@ Aplicación de escritorio para aplicar marcas de agua de texto a imágenes, desa
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 ![Version](https://img.shields.io/badge/Version-1.4.5-orange)
 
-## Capturas
-
-| Modo Claro | Modo Oscuro |
-|:----------:|:-----------:|
-| ![Light](resources/logo.png) | ![Dark](resources/logo.png) |
-
 ## Características
 
 - **Marcas de agua personalizables**: Texto libre con fuente, tamaño, color, ángulo y transparencia ajustables
